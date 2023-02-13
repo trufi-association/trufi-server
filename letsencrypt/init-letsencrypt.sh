@@ -10,7 +10,7 @@ if ! [ -n "$1" ]; then
   exit 1
 fi
 
-sed "s/example.org/$1/" ./app.template.conf > app.temporal.conf
+sed "s/example.org/$1/" ./app.base.conf > app.temporal.conf
 
 domains=($1)
 rsa_key_size=4096
