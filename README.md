@@ -3,8 +3,8 @@
 A repository as a recipe to create your own production backend environment which powers your very own version of Trufi App. This only contains the services which actually **consume & serve but <u>do not create</u>**
 
 - the search index (consumed by module `photon`)
-- the mbtile (map tiles for your region) (consumed by module `tileserver`)
-- the static png tiles for your region) (consumed by module `static_maps`)
+- the mbtile (map tiles for your region - consumed by module `tileserver`)
+- the static (png tiles for your region - consumed by module `static_maps`)
 - the routing graph (consumed by module `otp` - **O**pen**T**rip**P**lanner )
 
 and of course Nginx which combines these modules to one service to make them appear as *one* with *one* HTTPS certificate, web identity and url scheme.
