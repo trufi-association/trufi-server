@@ -1,42 +1,42 @@
 #!/bin/bash
+
+# Ensure the data directory exists
 [ -d "./data" ] || mkdir "./data"
 
-# Check if any arguments were passed
+# Validate input arguments
 if [ "$#" -eq 0 ]; then
   echo "Usage: $0 domain1 domain2 ..."
   exit 1
 fi
 
-# Assign the arguments to an array
 domains=("$@")
 
-# Create the data directory if it doesn't exist
-[ -d "./data" ] || mkdir "./data"
-
-# Check if the certbot directory doesn't exist
-if ! [ -d "./data/certbot" ]; then
-  cd ./letsencrypt
-  /bin/bash ./init-letsencrypt.sh "$domains"
-  mv ./data/certbot/ ../data/certbot/
-    echo "letsencrypt started"
-  cd ../
+# Crash if ./data/certbot already exists
+if [ -d "./data/certbot" ]; then
+  echo "Error: ./data/certbot already exists. Aborting to avoid overwriting."
+  exit 1
 fi
 
-if ! [ -f "./data/nginx/app.conf" ]; then
-  [ -d "./data/nginx" ] || mkdir "./data/nginx"
+# Create necessary directories
+mkdir -p "./data/nginx"
+mkdir -p "./data/certbot"
 
-  # Start creating the Nginx configuration file
-  echo "# Nginx configuration for multiple domains" > ./data/nginx/app.conf
-  
-  for domain in "${domains[@]}"; do
-    # Generate the config for each domain using the template
-    sed "s/example.org/$domain/g" ./nginx/app.template.conf >> ./data/nginx/app.conf
-    echo "Nginx config block for $domain created"
-  done
+# Run init-letsencrypt.sh for each domain individually (if required by your use-case)
+cd ./letsencrypt
+for domain in "${domains[@]}"; do
+  /bin/bash ./init-letsencrypt.sh "$domain"
+  echo "letsencrypt initialized for $domain"
+done
+mv ./data/certbot/* ../data/certbot/
+cd ../
 
-  echo "Nginx configuration file created with multiple domains"
-fi
+# Generate combined nginx config
+echo "# Nginx configuration for multiple domains" > ./data/nginx/app.conf
+for domain in "${domains[@]}"; do
+  sed "s/example.org/$domain/g" ./nginx/app.template.conf >> ./data/nginx/app.conf
+  echo "Nginx config block for $domain created"
+done
 
-
+echo "Nginx configuration file created with multiple domains"
 
 exit 0

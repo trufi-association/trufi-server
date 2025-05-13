@@ -4,21 +4,15 @@ if ! [ -x "$(command -v docker compose)" ]; then
   echo 'Error: docker compose is not installed.' >&2
   exit 1
 fi
-# Check if any arguments were passed
-if [ "$#" -eq 0 ]; then
-  echo "Usage: $0 domain1 domain2 ..."
+echo $1
+if ! [ -n "$1" ]; then
+  echo 'Error: domain variable is not present' >&2
   exit 1
 fi
-# Assign the arguments to an array
-domains=("$@")
-echo $domains
-# Join the domains with a space as the separator
-domain_list=$(IFS=' '; echo "${domains[*]}")
-echo $domain_list
 
-# Use sed to replace example.org with the domain list
-sed "s/example.org/$domain_list/" ./app.base.conf > app.template.conf
+sed "s/example.org/$1/" ./app.base.conf > app.template.conf
 
+domains=($1)
 rsa_key_size=4096
 data_path="./data/certbot"
 email="" # Adding a valid address is strongly recommended
