@@ -4,8 +4,19 @@ if ! [ -x "$(command -v docker compose)" ]; then
   echo 'Error: docker compose is not installed.' >&2
   exit 1
 fi
+# Check if any arguments were passed
+if [ "$#" -eq 0 ]; then
+  echo "Usage: $0 domain1 domain2 ..."
+  exit 1
+fi
+# Assign the arguments to an array
+domains=("$@")
+# Join the domains with a space as the separator
+domain_list=$(IFS=' '; echo "${domains[*]}")
 
-domains=(tileserver.kigali.trufi.dev kigali.trufi.dev)
+# Use sed to replace example.org with the domain list
+sed "s/example.org/$domain_list/" ./app.base.conf > app.template.conf
+
 rsa_key_size=4096
 data_path="./data/certbot"
 email="" # Adding a valid address is strongly recommended
@@ -76,5 +87,5 @@ docker compose run --rm --entrypoint "\
     --force-renewal" certbot
 echo
 
-echo "### Reloading nginx ..."
-docker compose exec nginx nginx -s reload
+echo "### stop docker compose ..."
+docker compose stop
