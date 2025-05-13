@@ -1,23 +1,34 @@
 #!/bin/sh
 [ -d "./data" ] || mkdir "./data"
 
-if ! [ -n "$1" ]; then
-    echo 'Error: domain name as param is needed' >&2
-    exit 1
+# Check if any arguments were passed
+if [ "$#" -eq 0 ]; then
+  echo "Usage: $0 domain1 domain2 ..."
+  exit 1
 fi
 
+# Assign the arguments to an array
+domains=("$@")
+# Join the domains with a space as the separator
+domain_list=$(IFS=' '; echo "${domains[*]}")
+
+# Create the data directory if it doesn't exist
+[ -d "./data" ] || mkdir "./data"
+
+# Check if the certbot directory doesn't exist
 if ! [ -d "./data/certbot" ]; then
-    cd ./letsencrypt
-    /bin/bash ./init-letsencrypt.sh $1
-    mv ./data/certbot/ ../data/certbot/
+  cd ./letsencrypt
+  /bin/bash ./init-letsencrypt.sh "$domain_list"
+  mv ./data/certbot/ ../data/certbot/
     echo "letsencrypt started"
-    cd ../
+  cd ../
 fi
 
 if ! [ -f "./data/nginx/app.conf" ]; then
-    [ -d "./data/nginx" ] || mkdir "./data/nginx"
-    sed "s/example.org/$1/" ./nginx/app.template.conf > ./data/nginx/app.conf
-    echo "nginx config created"
+  [ -d "./data/nginx" ] || mkdir "./data/nginx"
+  # Replace the placeholder with the joined domain list
+  sed "s/example.org/$domain_list/" ./nginx/app.template.conf > ./data/nginx/app.conf
+  echo "Nginx config created"
 fi
 
 
