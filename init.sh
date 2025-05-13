@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 [ -d "./data" ] || mkdir "./data"
 
 # Check if any arguments were passed
