@@ -11,8 +11,10 @@ if [ "$#" -eq 0 ]; then
 fi
 # Assign the arguments to an array
 domains=("$@")
+echo $domains
 # Join the domains with a space as the separator
 domain_list=$(IFS=' '; echo "${domains[*]}")
+echo $domain_list
 
 # Use sed to replace example.org with the domain list
 sed "s/example.org/$domain_list/" ./app.base.conf > app.template.conf

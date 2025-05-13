@@ -9,20 +9,18 @@ fi
 
 # Assign the arguments to an array
 domains=("$@")
-# Join the domains with a space as the separator
-domain_list=$(IFS=' '; echo "${domains[*]}")
 
 # Create the data directory if it doesn't exist
 [ -d "./data" ] || mkdir "./data"
 
-# # Check if the certbot directory doesn't exist
-# if ! [ -d "./data/certbot" ]; then
-#   cd ./letsencrypt
-#   /bin/bash ./init-letsencrypt.sh "$domain_list"
-#   mv ./data/certbot/ ../data/certbot/
-#     echo "letsencrypt started"
-#   cd ../
-# fi
+# Check if the certbot directory doesn't exist
+if ! [ -d "./data/certbot" ]; then
+  cd ./letsencrypt
+  /bin/bash ./init-letsencrypt.sh "$domains"
+  mv ./data/certbot/ ../data/certbot/
+    echo "letsencrypt started"
+  cd ../
+fi
 
 if ! [ -f "./data/nginx/app.conf" ]; then
   [ -d "./data/nginx" ] || mkdir "./data/nginx"
