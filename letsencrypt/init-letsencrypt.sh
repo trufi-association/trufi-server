@@ -15,6 +15,8 @@ sed "s/example.org/$1/" ./app.base.conf > app.template.conf
 domains=($1)
 rsa_key_size=4096
 data_path="./data/certbot"
+rm -rf "$data_path"
+
 email="" # Adding a valid address is strongly recommended
 staging=0 # Set to 1 if you're testing your setup to avoid hitting request limits
 
