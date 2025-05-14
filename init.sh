@@ -11,12 +11,6 @@ fi
 
 domains=("$@")
 
-# Crash if ./data/certbot already exists
-if [ -d "./data/certbot" ]; then
-  echo "Error: ./data/certbot already exists. Aborting to avoid overwriting."
-  exit 1
-fi
-
 # Create necessary directories
 mkdir -p "./data/nginx"
 mkdir -p "./data/certbot"
