@@ -21,11 +21,10 @@ for domain in "${domains[@]}"; do
   /bin/bash ./init-letsencrypt.sh "$domain"
   echo "letsencrypt initialized for $domain"
 done
-mv ./data/certbot/* ../data/certbot/
+cp -rn ./data/certbot/* ../data/certbot/
 cd ../
 
 # Generate combined nginx config
-echo "# Nginx configuration for multiple domains" > ./data/nginx/app.conf
 for domain in "${domains[@]}"; do
   sed "s/example.org/$domain/g" ./nginx/app.template.conf >> ./data/nginx/app.conf
   echo "Nginx config block for $domain created"
