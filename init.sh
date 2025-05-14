@@ -17,6 +17,7 @@ mkdir -p "./data/certbot"
 
 # Run init-letsencrypt.sh for each domain individually (if required by your use-case)
 cd ./letsencrypt
+rm -rf "./data/certbot"
 for domain in "${domains[@]}"; do
   /bin/bash ./init-letsencrypt.sh "$domain"
   echo "letsencrypt initialized for $domain"
