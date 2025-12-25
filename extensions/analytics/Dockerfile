@@ -1,14 +1,12 @@
-FROM golang:1.21-alpine AS builder
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+WORKDIR /src
+COPY *.csproj .
+RUN dotnet restore
+COPY . .
+RUN dotnet publish -c Release -o /app
 
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY main.go .
-RUN CGO_ENABLED=0 GOOS=linux go build -o analytics .
-
-FROM alpine:3.19
-RUN apk --no-cache add ca-certificates
-WORKDIR /app
-COPY --from=builder /app/analytics .
+COPY --from=build /app .
 EXPOSE 3000
-CMD ["./analytics"]
+ENTRYPOINT ["dotnet", "Analytics.dll"]
