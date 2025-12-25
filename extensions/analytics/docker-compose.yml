@@ -21,7 +21,6 @@ services:
       - POSTGRES_DB=analytics
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init:/docker-entrypoint-initdb.d
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U analytics"]
@@ -29,17 +28,16 @@ services:
       timeout: 5s
       retries: 5
 
-  metabase:
-    image: metabase/metabase:latest
-    ports:
-      - "3001:3000"
+  grafana:
+    image: grafana/grafana:latest
     environment:
-      - MB_DB_TYPE=postgres
-      - MB_DB_DBNAME=metabase
-      - MB_DB_PORT=5432
-      - MB_DB_USER=analytics
-      - MB_DB_PASS=analytics
-      - MB_DB_HOST=postgres
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,6 +45,7 @@ services:
 
 volumes:
   postgres_data:
+  grafana_data:
 
 networks:
   default:
