@@ -136,7 +136,7 @@ The `.well-known` directory is served at `https://yourdomain.com/.well-known/` f
 
 Each domain gets its own configuration file in `data/nginx/`:
 
-The template includes these location blocks for static files and well-known:
+To add static files or well-known endpoints to a domain, you can add these location blocks to the domain's `.conf` file:
 
 ```nginx
 location /static_files/ {

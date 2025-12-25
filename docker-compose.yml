@@ -14,7 +14,7 @@ services:
     command: /bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/static_files/healthcheck.json"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
