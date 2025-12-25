@@ -1,2 +1,6 @@
-letsencrypt/app.template.conf
-data/
+data/*
+!data/static_files/
+!data/well-known/
+data/static_files/*
+data/well-known/*
+!data/**/.gitkeep

@@ -46,7 +46,7 @@ docker compose up -d
 ### 4. Verify the installation
 
 ```bash
-curl https://yourdomain.com/static_files/healthcheck.json
+curl http://yourdomain.com/healthcheck
 ```
 
 ## Domain Management
@@ -139,7 +139,7 @@ Each domain gets its own configuration file in `data/nginx/`:
 To add static files or well-known endpoints to a domain, you can add these location blocks to the domain's `.conf` file:
 
 ```nginx
-location /static_files/ {
+location / {
     alias /app/static_files/;
     autoindex on;
 }
@@ -176,8 +176,7 @@ trufi-server/
 │   │       ├── archive/        # Certificate history
 │   │       └── renewal/        # Renewal configs
 │   ├── logs/                   # Nginx access and error logs
-│   ├── static_files/           # Your static files
-│   │   └── healthcheck.json    # Health check endpoint
+│   ├── static_files/           # Your static files (optional)
 │   └── well-known/             # .well-known directory
 ├── nginx/
 │   └── app.template.conf       # Nginx configuration template
@@ -227,7 +226,7 @@ docker compose logs -f certbot
 docker compose ps
 
 # Health check
-curl https://yourdomain.com/static_files/healthcheck.json
+curl http://yourdomain.com/healthcheck
 ```
 
 ### Certificate management

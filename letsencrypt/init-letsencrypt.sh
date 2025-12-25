@@ -80,3 +80,6 @@ echo
 
 echo "### stop docker compose ..."
 docker compose stop
+
+# Clean up temporary file
+rm -f app.template.conf

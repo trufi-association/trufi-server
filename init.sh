@@ -189,12 +189,6 @@ for domain in "${domains[@]}"; do
   log_info "Nginx config created: ${domain}.conf"
 done
 
-# Create default healthcheck file if it doesn't exist
-if [ ! -f "./data/static_files/healthcheck.json" ]; then
-  echo '{"status": "OK"}' > ./data/static_files/healthcheck.json
-  log_info "Created default healthcheck.json"
-fi
-
 echo ""
 log_info "Initialization complete!"
 echo ""
@@ -203,6 +197,6 @@ echo ""
 echo "Next steps:"
 echo "  1. Start the server: docker compose up -d"
 echo "  2. Check logs: docker compose logs -f"
-echo "  3. Verify health: curl https://${domains[0]}/static_files/healthcheck.json"
+echo "  3. Verify health: curl http://${domains[0]}/healthcheck"
 
 exit 0
