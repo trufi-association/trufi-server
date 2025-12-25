@@ -136,6 +136,20 @@ The `.well-known` directory is served at `https://yourdomain.com/.well-known/` f
 
 Each domain gets its own configuration file in `data/nginx/`:
 
+The template includes these location blocks for static files and well-known:
+
+```nginx
+location /static_files/ {
+    alias /app/static_files/;
+    autoindex on;
+}
+
+location /.well-known/ {
+    alias /app/well-known/;
+    autoindex on;
+}
+```
+
 ```
 data/nginx/
 ├── api.example.com.conf
