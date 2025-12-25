@@ -9,7 +9,20 @@ var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
 builder.Services.AddDbContext<AnalyticsDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "Analytics API", Version = "v1" });
+});
+
 var app = builder.Build();
+
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Analytics API v1");
+    c.RoutePrefix = "swagger";
+});
 
 // Wait for database
 using (var scope = app.Services.CreateScope())
@@ -42,9 +55,10 @@ app.MapGet("/health", async (AnalyticsDbContext db) =>
     {
         return Results.StatusCode(503);
     }
-});
+})
+.WithName("Health")
+.WithTags("Health");
 
-// Get logs with filters
 app.MapGet("/logs", async (
     AnalyticsDbContext db,
     DateTime? from,
@@ -87,9 +101,11 @@ app.MapGet("/logs", async (
         .ToListAsync();
 
     return Results.Ok(results);
-});
+})
+.WithName("GetLogs")
+.WithSummary("Get request logs with filters")
+.WithTags("Logs");
 
-// Get stats
 app.MapGet("/stats", async (AnalyticsDbContext db, DateTime? from, DateTime? to, string? host) =>
 {
     var query = db.Requests.AsQueryable();
@@ -111,9 +127,11 @@ app.MapGet("/stats", async (AnalyticsDbContext db, DateTime? from, DateTime? to,
         unique_devices = uniqueDevices,
         unique_hosts = uniqueHosts
     });
-});
+})
+.WithName("GetStats")
+.WithSummary("Get general statistics")
+.WithTags("Stats");
 
-// Get requests per hour
 app.MapGet("/stats/hourly", async (AnalyticsDbContext db, DateTime? from, DateTime? to, string? host) =>
 {
     var query = db.Requests.AsQueryable();
@@ -133,9 +151,11 @@ app.MapGet("/stats/hourly", async (AnalyticsDbContext db, DateTime? from, DateTi
         .ToListAsync();
 
     return Results.Ok(results);
-});
+})
+.WithName("GetHourlyStats")
+.WithSummary("Get requests per hour")
+.WithTags("Stats");
 
-// Get top endpoints
 app.MapGet("/stats/endpoints", async (AnalyticsDbContext db, DateTime? from, DateTime? to, string? host, int limit = 20) =>
 {
     var query = db.Requests.AsQueryable();
@@ -155,9 +175,11 @@ app.MapGet("/stats/endpoints", async (AnalyticsDbContext db, DateTime? from, Dat
         .ToListAsync();
 
     return Results.Ok(results);
-});
+})
+.WithName("GetTopEndpoints")
+.WithSummary("Get top endpoints by request count")
+.WithTags("Stats");
 
-// Get requests by device
 app.MapGet("/stats/devices", async (AnalyticsDbContext db, DateTime? from, DateTime? to, int limit = 20) =>
 {
     var query = db.Requests.Where(r => r.DeviceId != null);
@@ -175,6 +197,9 @@ app.MapGet("/stats/devices", async (AnalyticsDbContext db, DateTime? from, DateT
         .ToListAsync();
 
     return Results.Ok(results);
-});
+})
+.WithName("GetDeviceStats")
+.WithSummary("Get requests by device")
+.WithTags("Stats");
 
 app.Run("http://0.0.0.0:3001");
