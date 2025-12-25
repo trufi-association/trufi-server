@@ -158,7 +158,6 @@ log_info "Processing domains: ${domains[*]}"
 # Ensure directories exist
 mkdir -p "./data/nginx"
 mkdir -p "./data/certbot"
-mkdir -p "./data/logs"
 mkdir -p "./data/static_files"
 mkdir -p "./data/well-known"
 
