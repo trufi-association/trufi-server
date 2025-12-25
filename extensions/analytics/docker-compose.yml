@@ -1,14 +1,32 @@
 services:
-  analytics:
-    build: .
+  collector:
+    build:
+      context: .
+      dockerfile: src/Collector/Dockerfile
     environment:
-      - DATABASE_URL=postgres://analytics:analytics@postgres:5432/analytics?sslmode=disable
+      - DATABASE_URL=Host=postgres;Database=analytics;Username=analytics;Password=analytics
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  analytics-api:
+    build:
+      context: .
+      dockerfile: src/Api/Dockerfile
+    environment:
+      - DATABASE_URL=Host=postgres;Database=analytics;Username=analytics;Password=analytics
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3

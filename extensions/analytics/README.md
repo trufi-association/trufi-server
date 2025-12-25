@@ -1,14 +1,30 @@
 # Analytics Extension
 
-Real-time request logging to PostgreSQL with Grafana dashboard.
+Real-time request logging to PostgreSQL.
 
 ## Architecture
 
 ```
-nginx (mirror) → Go Logger → PostgreSQL ← Grafana
+nginx (mirror) → Collector → PostgreSQL ← Api
 ```
 
-All requests are mirrored to the analytics service without affecting response time.
+- **Collector**: Receives mirrored requests from nginx and stores them (port 3000)
+- **Api**: Exposes REST endpoints for querying logs and statistics (port 3001)
+- **PostgreSQL**: Stores all request data
+
+All requests are mirrored to the collector service without affecting response time.
+
+## Project Structure
+
+```
+analytics/
+├── Analytics.sln
+├── docker-compose.yml
+└── src/
+    ├── Shared/           # Models, DbContext, Migrations
+    ├── Collector/        # Receives and stores requests
+    └── Api/              # REST API for querying
+```
 
 ## Setup
 
@@ -18,19 +34,18 @@ cd extensions/analytics
 docker compose up -d
 ```
 
-2. Configure nginx proxy (see below)
+2. Migrations run automatically on startup (Collector applies them)
 
-3. Access Grafana at `https://yourdomain.com/grafana/`
-   - Default credentials: `admin` / `admin`
+3. Configure nginx proxy for the API (see below)
 
-## Expose via Nginx Proxy
+## Expose API via Nginx Proxy
 
 Add this to your domain's nginx config (in `data/nginx/yourdomain.conf`), inside the `server` block for port 443:
 
 ```nginx
-    # Grafana dashboard
-    location /grafana/ {
-        proxy_pass http://grafana:3000/grafana/;
+    # Analytics API
+    location /analytics-api/ {
+        proxy_pass http://analytics-api:3001/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -43,17 +58,43 @@ Then reload nginx:
 docker compose exec nginx_single_server nginx -s reload
 ```
 
-## Configure Grafana Data Source
+## API Endpoints
 
-1. Go to **Connections** → **Data sources** → **Add data source**
-2. Select **PostgreSQL**
-3. Configure:
-   - Host: `postgres:5432`
-   - Database: `analytics`
-   - User: `analytics`
-   - Password: `analytics`
-   - TLS/SSL Mode: `disable`
-4. Click **Save & test**
+### Get Logs
+```
+GET /logs?from=2024-01-01&to=2024-01-31&host=example.com&method=GET&deviceId=abc123&limit=100&offset=0
+```
+
+All parameters are optional.
+
+### Get Statistics
+```
+GET /stats?from=2024-01-01&to=2024-01-31&host=example.com
+```
+
+Response:
+```json
+{
+  "total_requests": 12345,
+  "unique_devices": 456,
+  "unique_hosts": 3
+}
+```
+
+### Get Hourly Stats
+```
+GET /stats/hourly?from=2024-01-01&to=2024-01-31&host=example.com
+```
+
+### Get Top Endpoints
+```
+GET /stats/endpoints?from=2024-01-01&to=2024-01-31&host=example.com&limit=20
+```
+
+### Get Device Stats
+```
+GET /stats/devices?from=2024-01-01&to=2024-01-31&limit=20
+```
 
 ## Database Schema
 
@@ -67,63 +108,72 @@ requests (
     device_id VARCHAR(255),
     user_agent TEXT,
     body TEXT,
-    received_at TIMESTAMP,
-    created_at TIMESTAMP
+    received_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE
 )
 ```
 
-## Example Grafana Queries
+Indexes on: `host`, `received_at`, `device_id`
 
-### Requests per hour (Time series)
-```sql
-SELECT
-  date_trunc('hour', received_at) AS time,
-  COUNT(*) AS requests
-FROM requests
-WHERE received_at >= NOW() - INTERVAL '24 hours'
-GROUP BY time
-ORDER BY time
+## Migrations
+
+Migrations are managed with Entity Framework Core and run automatically when Collector starts.
+
+### Create a new migration
+
+```bash
+cd extensions/analytics
+
+# Install EF tools if needed
+dotnet tool install --global dotnet-ef
+
+# Create migration
+dotnet ef migrations add MigrationName \
+  --project src/Shared \
+  --startup-project src/Collector
 ```
 
-### Top endpoints (Table)
-```sql
-SELECT uri, COUNT(*) as hits
-FROM requests
-WHERE received_at >= NOW() - INTERVAL '24 hours'
-GROUP BY uri
-ORDER BY hits DESC
-LIMIT 20
+### Apply migrations manually
+
+```bash
+dotnet ef database update \
+  --project src/Shared \
+  --startup-project src/Collector
 ```
 
-### Requests by device (Pie chart)
-```sql
-SELECT
-  COALESCE(device_id, 'unknown') as device,
-  COUNT(*) as requests
-FROM requests
-WHERE received_at >= NOW() - INTERVAL '24 hours'
-GROUP BY device_id
-ORDER BY requests DESC
-LIMIT 10
+### Rollback migration
+
+```bash
+dotnet ef database update PreviousMigrationName \
+  --project src/Shared \
+  --startup-project src/Collector
 ```
 
-### Requests per domain (Bar chart)
-```sql
-SELECT host, COUNT(*) as requests
-FROM requests
-WHERE received_at >= NOW() - INTERVAL '24 hours'
-GROUP BY host
-ORDER BY requests DESC
+## Development
+
+### Build locally
+
+```bash
+cd extensions/analytics
+dotnet build
 ```
 
-### Traffic over time by method (Time series)
-```sql
-SELECT
-  date_trunc('hour', received_at) AS time,
-  method,
-  COUNT(*) AS requests
-FROM requests
-WHERE received_at >= NOW() - INTERVAL '24 hours'
-GROUP BY time, method
-ORDER BY time
+### Run locally
+
+```bash
+# Start postgres
+docker compose up -d postgres
+
+# Run collector
+dotnet run --project src/Collector
+
+# Run api (in another terminal)
+dotnet run --project src/Api
+```
+
+### Rebuild containers
+
+```bash
+docker compose build
+docker compose up -d
 ```
