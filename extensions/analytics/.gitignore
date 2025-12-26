@@ -1,0 +1,20 @@
+# Build results
+bin/
+obj/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Test results
+TestResults/
+coverage/
+
+# NuGet
+*.nupkg
+packages/
+
+# Logs
+*.log

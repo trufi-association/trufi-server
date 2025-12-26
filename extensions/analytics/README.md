@@ -20,10 +20,12 @@ All requests are mirrored to the collector service without affecting response ti
 analytics/
 ├── Analytics.sln
 ├── docker-compose.yml
-└── src/
-    ├── Shared/           # Models, DbContext, Migrations
-    ├── Collector/        # Receives and stores requests
-    └── Api/              # REST API for querying
+├── src/
+│   ├── Shared/           # Models, DbContext, Services, Migrations
+│   ├── Collector/        # Receives and stores requests
+│   └── Api/              # REST API for querying
+└── tests/
+    └── Analytics.Tests/  # Unit and integration tests
 ```
 
 ## Setup
@@ -177,3 +179,31 @@ dotnet run --project src/Api
 docker compose build
 docker compose up -d
 ```
+
+## Testing
+
+Tests use an in-memory database, no external dependencies required.
+
+### Run all tests
+
+```bash
+cd extensions/analytics
+dotnet test
+```
+
+### Run with coverage
+
+```bash
+dotnet test --collect:"XPlat Code Coverage"
+```
+
+### Run specific test class
+
+```bash
+dotnet test --filter "FullyQualifiedName~RequestServiceTests"
+```
+
+### Test structure
+
+- **Unit tests** (`tests/Analytics.Tests/Unit/`): Test services in isolation with in-memory database
+- **Integration tests** (`tests/Analytics.Tests/Integration/`): Test API endpoints with WebApplicationFactory
