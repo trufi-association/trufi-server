@@ -16,11 +16,11 @@ public class Program
         builder.Services.AddControllers();
         builder.Services.AddAnalyticsServices(connectionString);
         builder.Services.AddScoped<IStatsService, StatsService>();
-        builder.Services.AddSwaggerConfiguration();
+        builder.Services.AddOpenApiConfiguration();
 
         var app = builder.Build();
 
-        app.UseSwaggerConfiguration();
+        app.UseOpenApiConfiguration();
 
         if (!app.Environment.IsEnvironment("Testing"))
         {
