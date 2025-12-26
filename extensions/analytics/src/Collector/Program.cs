@@ -1,26 +1,28 @@
-using Collector.Controllers;
 using Shared.Extensions;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace Collector;
 
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? "Host=postgres;Database=analytics;Username=analytics;Password=analytics";
-
-builder.Services.AddAnalyticsServices(connectionString);
-
-var app = builder.Build();
-
-if (!app.Environment.IsEnvironment("Testing"))
+public class Program
 {
-    await app.Services.MigrateDatabaseAsync();
-}
+    public static async Task Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
 
-app.MapHealthController();
-app.MapLogController();
+        var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+            ?? "Host=postgres;Database=analytics;Username=analytics;Password=analytics";
 
-app.Run("http://0.0.0.0:3000");
+        builder.Services.AddControllers();
+        builder.Services.AddAnalyticsServices(connectionString);
 
-namespace Collector
-{
-    public partial class Program { }
+        var app = builder.Build();
+
+        if (!app.Environment.IsEnvironment("Testing"))
+        {
+            await app.Services.MigrateDatabaseAsync();
+        }
+
+        app.MapControllers();
+
+        app.Run();
+    }
 }

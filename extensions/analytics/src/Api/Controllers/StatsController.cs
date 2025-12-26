@@ -1,42 +1,26 @@
 using Api.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers;
 
-public static class StatsController
+[ApiController]
+[Route("[controller]")]
+public class StatsController : ControllerBase
 {
-    public static void MapStatsController(this WebApplication app)
+    private readonly IStatsService _statsService;
+
+    public StatsController(IStatsService statsService)
     {
-        app.MapGet("/stats", GetGeneralStats)
-            .WithName("GetStats")
-            .WithSummary("Get general statistics")
-            .WithTags("Stats");
-
-        app.MapGet("/stats/hourly", GetHourlyStats)
-            .WithName("GetHourlyStats")
-            .WithSummary("Get requests per hour")
-            .WithTags("Stats");
-
-        app.MapGet("/stats/endpoints", GetTopEndpoints)
-            .WithName("GetTopEndpoints")
-            .WithSummary("Get top endpoints by request count")
-            .WithTags("Stats");
-
-        app.MapGet("/stats/devices", GetDeviceStats)
-            .WithName("GetDeviceStats")
-            .WithSummary("Get requests by device")
-            .WithTags("Stats");
+        _statsService = statsService;
     }
 
-    private static async Task<IResult> GetGeneralStats(
-        IStatsService statsService,
-        DateTime? from,
-        DateTime? to,
-        string? host)
+    [HttpGet("/stats")]
+    public async Task<IActionResult> GetStats(DateTime? from, DateTime? to, string? host)
     {
         var filter = new StatsFilter(from, to, host);
-        var stats = await statsService.GetGeneralStatsAsync(filter);
+        var stats = await _statsService.GetGeneralStatsAsync(filter);
 
-        return Results.Ok(new
+        return Ok(new
         {
             total_requests = stats.TotalRequests,
             unique_devices = stats.UniqueDevices,
@@ -44,40 +28,30 @@ public static class StatsController
         });
     }
 
-    private static async Task<IResult> GetHourlyStats(
-        IStatsService statsService,
-        DateTime? from,
-        DateTime? to,
-        string? host)
+    [HttpGet("/stats/hourly")]
+    public async Task<IActionResult> GetHourlyStats(DateTime? from, DateTime? to, string? host)
     {
         var filter = new StatsFilter(from, to, host);
-        var results = await statsService.GetHourlyStatsAsync(filter);
+        var results = await _statsService.GetHourlyStatsAsync(filter);
 
-        return Results.Ok(results.Select(r => new { hour = r.Hour, count = r.Count }));
+        return Ok(results.Select(r => new { hour = r.Hour, count = r.Count }));
     }
 
-    private static async Task<IResult> GetTopEndpoints(
-        IStatsService statsService,
-        DateTime? from,
-        DateTime? to,
-        string? host,
-        int limit = 20)
+    [HttpGet("/stats/endpoints")]
+    public async Task<IActionResult> GetTopEndpoints(DateTime? from, DateTime? to, string? host, int limit = 20)
     {
         var filter = new StatsFilter(from, to, host);
-        var results = await statsService.GetTopEndpointsAsync(filter, limit);
+        var results = await _statsService.GetTopEndpointsAsync(filter, limit);
 
-        return Results.Ok(results.Select(r => new { uri = r.Uri, count = r.Count }));
+        return Ok(results.Select(r => new { uri = r.Uri, count = r.Count }));
     }
 
-    private static async Task<IResult> GetDeviceStats(
-        IStatsService statsService,
-        DateTime? from,
-        DateTime? to,
-        int limit = 20)
+    [HttpGet("/stats/devices")]
+    public async Task<IActionResult> GetDeviceStats(DateTime? from, DateTime? to, int limit = 20)
     {
         var filter = new StatsFilter(from, to, null);
-        var results = await statsService.GetDeviceStatsAsync(filter, limit);
+        var results = await _statsService.GetDeviceStatsAsync(filter, limit);
 
-        return Results.Ok(results.Select(r => new { device_id = r.DeviceId, count = r.Count }));
+        return Ok(results.Select(r => new { device_id = r.DeviceId, count = r.Count }));
     }
 }

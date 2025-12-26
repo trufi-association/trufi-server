@@ -1,34 +1,42 @@
+using Microsoft.AspNetCore.Mvc;
 using Shared.Services;
 
 namespace Collector.Controllers;
 
-public static class LogController
+[ApiController]
+[Route("[controller]")]
+public class LogController : ControllerBase
 {
-    public static void MapLogController(this WebApplication app)
+    private readonly IRequestService _requestService;
+
+    public LogController(IRequestService requestService)
     {
-        app.MapPost("/log", async (HttpContext context, IRequestService requestService) =>
+        _requestService = requestService;
+    }
+
+    [HttpPost("/log")]
+    public async Task<IActionResult> PostLog()
+    {
+        var headers = Request.Headers;
+
+        string body;
+        using (var reader = new StreamReader(Request.Body))
         {
-            var headers = context.Request.Headers;
+            body = await reader.ReadToEndAsync();
+        }
 
-            string body;
-            using (var reader = new StreamReader(context.Request.Body))
-            {
-                body = await reader.ReadToEndAsync();
-            }
+        var dto = new CreateRequestDto(
+            Method: headers["X-Original-Method"].FirstOrDefault() ?? "",
+            Uri: headers["X-Original-URI"].FirstOrDefault() ?? "",
+            Host: headers["X-Original-Host"].FirstOrDefault() ?? "",
+            Ip: headers["X-Real-IP"].FirstOrDefault(),
+            DeviceId: headers["X-Device-Id"].FirstOrDefault() ?? headers["Device-Id"].FirstOrDefault(),
+            UserAgent: headers["User-Agent"].FirstOrDefault(),
+            Body: body
+        );
 
-            var dto = new CreateRequestDto(
-                Method: headers["X-Original-Method"].FirstOrDefault() ?? "",
-                Uri: headers["X-Original-URI"].FirstOrDefault() ?? "",
-                Host: headers["X-Original-Host"].FirstOrDefault() ?? "",
-                Ip: headers["X-Real-IP"].FirstOrDefault(),
-                DeviceId: headers["X-Device-Id"].FirstOrDefault() ?? headers["Device-Id"].FirstOrDefault(),
-                UserAgent: headers["User-Agent"].FirstOrDefault(),
-                Body: body
-            );
+        await _requestService.CreateRequestAsync(dto);
 
-            await requestService.CreateRequestAsync(dto);
-
-            return Results.Ok();
-        });
+        return Ok();
     }
 }

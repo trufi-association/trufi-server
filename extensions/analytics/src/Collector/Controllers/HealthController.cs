@@ -1,24 +1,32 @@
+using Microsoft.AspNetCore.Mvc;
 using Shared.Services;
 
 namespace Collector.Controllers;
 
-public static class HealthController
+[ApiController]
+[Route("[controller]")]
+public class HealthController : ControllerBase
 {
-    public static void MapHealthController(this WebApplication app)
+    private readonly IHealthService _healthService;
+
+    public HealthController(IHealthService healthService)
     {
-        app.MapGet("/health", async (IHealthService healthService) =>
+        _healthService = healthService;
+    }
+
+    [HttpGet("/health")]
+    public async Task<IActionResult> GetHealth()
+    {
+        try
         {
-            try
-            {
-                var isHealthy = await healthService.CheckDatabaseConnectionAsync();
-                return isHealthy
-                    ? Results.Ok(new { status = "ok" })
-                    : Results.StatusCode(503);
-            }
-            catch
-            {
-                return Results.StatusCode(503);
-            }
-        });
+            var isHealthy = await _healthService.CheckDatabaseConnectionAsync();
+            return isHealthy
+                ? Ok(new { status = "ok" })
+                : StatusCode(503);
+        }
+        catch
+        {
+            return StatusCode(503);
+        }
     }
 }
