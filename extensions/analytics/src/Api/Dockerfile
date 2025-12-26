@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine AS build
 WORKDIR /src
 
 COPY src/Shared/Shared.csproj src/Shared/
@@ -9,7 +9,7 @@ COPY src/Shared/ src/Shared/
 COPY src/Api/ src/Api/
 RUN dotnet publish src/Api/Api.csproj -c Release -o /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine
 WORKDIR /app
 COPY --from=build /app .
 EXPOSE 3001
