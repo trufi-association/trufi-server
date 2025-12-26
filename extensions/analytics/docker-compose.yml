@@ -21,6 +21,7 @@ services:
       dockerfile: src/Api/Dockerfile
     environment:
       - DATABASE_URL=Host=postgres;Database=analytics;Username=analytics;Password=analytics
+      - BASE_PATH=/analytics-api
     depends_on:
       postgres:
         condition: service_healthy

@@ -17,10 +17,25 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-app.UseSwagger();
+var basePath = Environment.GetEnvironmentVariable("BASE_PATH") ?? "";
+
+app.UseSwagger(c =>
+{
+    c.PreSerializeFilters.Add((swaggerDoc, httpReq) =>
+    {
+        if (!string.IsNullOrEmpty(basePath))
+        {
+            swaggerDoc.Servers = new List<Microsoft.OpenApi.Models.OpenApiServer>
+            {
+                new() { Url = basePath }
+            };
+        }
+    });
+});
+
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Analytics API v1");
+    c.SwaggerEndpoint("v1/swagger.json", "Analytics API v1");
     c.RoutePrefix = "swagger";
 });
 
