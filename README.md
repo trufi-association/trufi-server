@@ -33,41 +33,25 @@ flowchart TB
 
 ## Quick Start
 
-### 1. Clone and configure
+### 1. Clone and run setup
 
 ```bash
 git clone https://github.com/trufi-association/trufi-server.git
 cd trufi-server
+./setup.sh
 ```
 
-### 2. Edit configuration
+The setup script will ask for your email (for Let's Encrypt SSL certificates).
 
-Edit `data/config/appsettings.json`:
+### 2. Add services
 
-```json
-{
-  "LettuceEncrypt": {
-    "AcceptTermsOfService": true,
-    "DomainNames": ["yourdomain.com", "api.yourdomain.com"],
-    "EmailAddress": "admin@yourdomain.com"
-  },
-  "ReverseProxy": {
-    "Routes": {
-      "my-api": {
-        "ClusterId": "my-api",
-        "Match": { "Hosts": ["api.yourdomain.com"] }
-      }
-    },
-    "Clusters": {
-      "my-api": {
-        "Destinations": {
-          "primary": { "Address": "http://my-backend:8080" }
-        }
-      }
-    }
-  }
-}
+```bash
+./setup.sh
+# [1] Add external service - for repos with trufi-proxy.json (photon, otp, etc.)
+# [2] Expose Analytics API - expose the built-in analytics on a domain
 ```
+
+Each service gets its own domain (e.g., `photon.trufi.app`, `otp.example.com`).
 
 ### 3. Start
 
@@ -77,57 +61,28 @@ docker compose up -d
 
 ---
 
-## Adding New Domains and Proxies
+## Adding Services
 
-### Step 1: Add domain to SSL
-
-Edit `data/config/appsettings.json` and add your domain to `LettuceEncrypt.DomainNames`:
-
-```json
-{
-  "LettuceEncrypt": {
-    "AcceptTermsOfService": true,
-    "DomainNames": [
-      "yourdomain.com",
-      "api.yourdomain.com",
-      "newservice.yourdomain.com"  // <-- Add new domain
-    ],
-    "EmailAddress": "admin@yourdomain.com"
-  }
-}
-```
-
-### Step 2: Add route and cluster
-
-Add a new route in `ReverseProxy.Routes` and a cluster in `ReverseProxy.Clusters`:
-
-```json
-{
-  "ReverseProxy": {
-    "Routes": {
-      "newservice": {
-        "ClusterId": "newservice",
-        "Match": { "Hosts": ["newservice.yourdomain.com"] }
-      }
-    },
-    "Clusters": {
-      "newservice": {
-        "Destinations": {
-          "primary": { "Address": "http://newservice-container:3000" }
-        }
-      }
-    }
-  }
-}
-```
-
-### Step 3: Restart server
+### Using setup.sh (recommended)
 
 ```bash
-docker compose restart server
+./setup.sh
+# Select [1] Add service
 ```
 
-SSL certificates are obtained automatically.
+The script reads the service's `trufi-proxy.json` and automatically:
+- Adds the subdomain to SSL certificates
+- Configures the reverse proxy route
+- Configures the backend cluster
+
+### Manual configuration
+
+Edit `data/config/appsettings.json`:
+
+1. Add domain to `LettuceEncrypt.DomainNames`
+2. Add route to `ReverseProxy.Routes`
+3. Add cluster to `ReverseProxy.Clusters`
+4. Run `docker compose restart server`
 
 ---
 
@@ -257,6 +212,8 @@ All proxied requests are logged automatically. Access analytics at `/analytics-a
 
 ```
 trufi-server/
+├── setup.sh                     # Interactive setup script
+├── trufi-proxy.example.json     # Example config for external services
 ├── docker-compose.yml
 ├── server/
 │   ├── Gateway.sln
@@ -370,6 +327,49 @@ public async Task MyService_ShouldDoSomething()
     Assert.NotNull(result);
 }
 ```
+
+---
+
+## Creating a Trufi Service
+
+To make your service compatible with trufi-server, add a `trufi-proxy.json` file to the root of your repository:
+
+```json
+{
+  "name": "my-service",
+  "description": "Description of your service",
+  "container": "my-service",
+  "port": 8080
+}
+```
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Service identifier (used as route/cluster key) |
+| `description` | No | Human-readable description |
+| `container` | Yes | Docker container name (must match service name in docker-compose) |
+| `port` | Yes | Internal port your service runs on |
+
+### Network
+
+Your service must connect to the `trufi-server` network:
+
+```yaml
+# In your docker-compose.yml
+services:
+  my-service:
+    # ... your config
+    networks:
+      - trufi-server
+
+networks:
+  trufi-server:
+    external: true
+```
+
+See `trufi-proxy.example.json` for a complete example.
 
 ---
 
