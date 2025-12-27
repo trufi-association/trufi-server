@@ -1,319 +1,384 @@
-# Trufi Server - Vanilla
+# Trufi Server
 
-This repository enables the creation of a robust production backend environment, specifically designed to support the customized iteration of the Trufi App. It empowers users to establish and deploy their own personalized Trufi App instances.
-
-## Architecture
-
-<img src="./diagram/trufi-nginx.png" hspace="20"/>
+Production backend for the Trufi App with built-in analytics and automatic SSL.
 
 ## Features
 
-- **Multi-domain support**: Configure multiple domains incrementally
-- **Incremental management**: Add, update, or remove domains without affecting others
-- **Automatic SSL/TLS**: Let's Encrypt certificates with auto-renewal every 12 hours
-- **HTTP/2**: Enabled for better performance
-- **Docker-based**: Easy deployment and management
-- **Health monitoring**: Built-in health check endpoint
-- **Auto-restart**: Services automatically restart on failure
+- **YARP Reverse Proxy**: High-performance .NET reverse proxy by Microsoft
+- **Automatic SSL**: Let's Encrypt certificates via LettuceEncrypt (auto-renewal)
+- **Request Analytics**: All requests logged to PostgreSQL (async, non-blocking)
+- **Multi-route support**: Route by path (`/api/*`) or subdomain (`api.domain.com`)
 
-## Requirements
+## Architecture
 
-- Docker and Docker Compose
-- A server with ports 80 and 443 available
-- Domain name(s) pointing to your server's IP address
+```mermaid
+flowchart TB
+    Client[Client] -->|:80/:443| Gateway
+
+    subgraph Gateway["Gateway Container"]
+        SSL[LettuceEncrypt<br/>Auto SSL]
+        YARP[YARP<br/>Reverse Proxy]
+        MW[Analytics Middleware<br/>async DB insert]
+        API[Analytics API<br/>/analytics-api/*]
+    end
+
+    PG[(PostgreSQL)]
+    Backends[Your Backends]
+
+    SSL --> YARP --> MW
+    MW -->|async| PG
+    MW -->|proxy| Backends
+    API --> PG
+```
 
 ## Quick Start
 
-### 1. Clone the repository
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/trufi-association/trufi-server.git
 cd trufi-server
 ```
 
-### 2. Initialize with your domain(s)
+### 2. Edit `server/src/Gateway/appsettings.json`
 
-```bash
-./init.sh api.yourdomain.com
+```json
+{
+  "LettuceEncrypt": {
+    "AcceptTermsOfService": true,
+    "DomainNames": ["yourdomain.com", "api.yourdomain.com"],
+    "EmailAddress": "admin@yourdomain.com"
+  },
+  "ReverseProxy": {
+    "Routes": {
+      "my-api": {
+        "ClusterId": "my-api",
+        "Match": { "Hosts": ["api.yourdomain.com"] }
+      }
+    },
+    "Clusters": {
+      "my-api": {
+        "Destinations": {
+          "primary": { "Address": "http://my-backend:8080" }
+        }
+      }
+    }
+  }
+}
 ```
 
-### 3. Start the server
+### 3. Start
 
 ```bash
 docker compose up -d
 ```
 
-### 4. Verify the installation
+---
 
-```bash
-curl http://yourdomain.com/healthcheck
-```
+## Adding New Domains and Proxies
 
-## Domain Management
+### Step 1: Add domain to SSL
 
-The `init.sh` script provides full domain lifecycle management:
+Edit `server/src/Gateway/appsettings.json` and add your domain to `LettuceEncrypt.DomainNames`:
 
-### Add domains
-
-```bash
-# Add a single domain
-./init.sh api.example.com
-
-# Add multiple domains at once
-./init.sh api.example.com app.example.com
-
-# Add more domains later (existing ones are preserved)
-./init.sh admin.example.com
-```
-
-### List configured domains
-
-```bash
-./init.sh -l
-# or
-./init.sh --list
-```
-
-### Update a domain
-
-Simply run init.sh again with the domain name. It will update the Nginx configuration without re-requesting the SSL certificate:
-
-```bash
-./init.sh api.example.com
-```
-
-### Remove domains
-
-```bash
-# Remove a specific domain
-./init.sh -r old.example.com
-
-# Remove multiple domains
-./init.sh -r old1.example.com old2.example.com
-```
-
-### Reset everything
-
-```bash
-./init.sh --reset
-```
-
-### Help
-
-```bash
-./init.sh -h
-# or
-./init.sh --help
-```
-
-## Configuration
-
-### SSL Certificates
-
-SSL certificates are automatically obtained from Let's Encrypt during initialization. Certificates are renewed automatically every 12 hours.
-
-To configure email notifications for certificate expiration, edit `letsencrypt/init-letsencrypt.sh`:
-
-```bash
-email="your-email@example.com"  # Line 19
-```
-
-### Static Files
-
-Place your static files in `data/static_files/`. They will be served at:
-
-```
-https://yourdomain.com/static_files/
-```
-
-Directory listing is enabled, so you can browse files directly.
-
-### Well-Known Directory
-
-The `.well-known` directory is served at `https://yourdomain.com/.well-known/` for ACME challenges and other standard endpoints (like `assetlinks.json` for Android apps).
-
-### Nginx Configuration
-
-Each domain gets its own configuration file in `data/nginx/`:
-
-To add static files or well-known endpoints to a domain, you can add these location blocks to the domain's `.conf` file:
-
-```nginx
-location / {
-    alias /app/static_files/;
-    autoindex on;
-}
-
-location /.well-known/ {
-    alias /app/well-known/;
-    autoindex on;
+```json
+{
+  "LettuceEncrypt": {
+    "AcceptTermsOfService": true,
+    "DomainNames": [
+      "yourdomain.com",
+      "api.yourdomain.com",
+      "newservice.yourdomain.com"  // <-- Add new domain
+    ],
+    "EmailAddress": "admin@yourdomain.com"
+  }
 }
 ```
 
-```
-data/nginx/
-├── api.example.com.conf
-├── app.example.com.conf
-└── admin.example.com.conf
+### Step 2: Add route and cluster
+
+Add a new route in `ReverseProxy.Routes` and a cluster in `ReverseProxy.Clusters`:
+
+```json
+{
+  "ReverseProxy": {
+    "Routes": {
+      "newservice": {
+        "ClusterId": "newservice",
+        "Match": { "Hosts": ["newservice.yourdomain.com"] }
+      }
+    },
+    "Clusters": {
+      "newservice": {
+        "Destinations": {
+          "primary": { "Address": "http://newservice-container:3000" }
+        }
+      }
+    }
+  }
+}
 ```
 
-To customize a domain's configuration, edit its `.conf` file directly.
+### Step 3: Restart server
 
-## Directory Structure
+```bash
+docker compose restart server
+```
+
+SSL certificates are obtained automatically.
+
+---
+
+## Route Configuration Examples
+
+### Subdomain routing
+
+Route `api.yourdomain.com` to a backend:
+
+```json
+{
+  "Routes": {
+    "api": {
+      "ClusterId": "api",
+      "Match": { "Hosts": ["api.yourdomain.com"] }
+    }
+  },
+  "Clusters": {
+    "api": {
+      "Destinations": {
+        "primary": { "Address": "http://api-backend:8080" }
+      }
+    }
+  }
+}
+```
+
+### Path-based routing
+
+Route `yourdomain.com/api/*` to a backend:
+
+```json
+{
+  "Routes": {
+    "api": {
+      "ClusterId": "api",
+      "Match": { "Path": "/api/{**catch-all}" },
+      "Transforms": [{ "PathRemovePrefix": "/api" }]
+    }
+  },
+  "Clusters": {
+    "api": {
+      "Destinations": {
+        "primary": { "Address": "http://api-backend:8080" }
+      }
+    }
+  }
+}
+```
+
+### Multiple backends (load balancing)
+
+```json
+{
+  "Clusters": {
+    "api": {
+      "LoadBalancingPolicy": "RoundRobin",
+      "Destinations": {
+        "server1": { "Address": "http://api-1:8080" },
+        "server2": { "Address": "http://api-2:8080" }
+      }
+    }
+  }
+}
+```
+
+### Complete example
+
+```json
+{
+  "LettuceEncrypt": {
+    "AcceptTermsOfService": true,
+    "DomainNames": [
+      "trufi.yourdomain.com",
+      "photon.yourdomain.com",
+      "otp.yourdomain.com"
+    ],
+    "EmailAddress": "admin@yourdomain.com"
+  },
+  "ReverseProxy": {
+    "Routes": {
+      "photon": {
+        "ClusterId": "photon",
+        "Match": { "Hosts": ["photon.yourdomain.com"] }
+      },
+      "otp": {
+        "ClusterId": "otp",
+        "Match": { "Hosts": ["otp.yourdomain.com"] }
+      }
+    },
+    "Clusters": {
+      "photon": {
+        "Destinations": {
+          "primary": { "Address": "http://photon:2322" }
+        }
+      },
+      "otp": {
+        "Destinations": {
+          "primary": { "Address": "http://opentripplanner:8080" }
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## Analytics API
+
+All proxied requests are logged automatically. Access analytics at `/analytics-api/*`:
+
+| Endpoint | Description |
+|----------|-------------|
+| `/analytics-api/swagger` | Swagger UI documentation |
+| `/analytics-api/logs` | Get logged requests |
+| `/analytics-api/logs?host=api.domain.com&limit=100` | Filter by host |
+| `/analytics-api/logs?from=2024-01-01&to=2024-01-31` | Filter by date |
+| `/analytics-api/stats` | General statistics |
+| `/analytics-api/stats/hourly` | Requests per hour |
+| `/analytics-api/stats/endpoints` | Top endpoints |
+| `/analytics-api/stats/devices` | Top devices |
+
+---
+
+## Project Structure
 
 ```
 trufi-server/
-├── docker-compose.yml          # Main Docker Compose configuration
-├── init.sh                     # Domain management script
-├── README.md
-├── data/
-│   ├── nginx/                  # Individual Nginx configs per domain
-│   │   ├── domain1.conf
-│   │   └── domain2.conf
-│   ├── certbot/                # SSL certificates
-│   │   └── conf/
-│   │       ├── live/           # Current certificates
-│   │       ├── archive/        # Certificate history
-│   │       └── renewal/        # Renewal configs
-│   ├── logs/                   # Nginx access and error logs
-│   ├── static_files/           # Your static files (optional)
-│   └── well-known/             # .well-known directory
-├── nginx/
-│   └── app.template.conf       # Nginx configuration template
-├── letsencrypt/
-│   ├── init-letsencrypt.sh     # Certificate initialization
-│   ├── app.base.conf           # Base config for ACME challenge
-│   └── docker-compose.yml      # Certbot compose file
-└── diagram/
-    └── trufi-nginx.png         # Architecture diagram
+├── docker-compose.yml
+├── server/
+│   ├── Gateway.sln
+│   ├── src/
+│   │   ├── Gateway/                 # Host (YARP, SSL, Swagger)
+│   │   │   ├── Program.cs
+│   │   │   ├── appsettings.json     # <-- Configure here
+│   │   │   └── Dockerfile
+│   │   ├── Gateway.Analytics/       # Analytics API (logs, stats)
+│   │   │   ├── Controllers/
+│   │   │   └── Services/
+│   │   ├── Gateway.Middleware/      # Request interceptor
+│   │   │   └── AnalyticsMiddleware.cs
+│   │   └── Gateway.Shared/          # Models, DbContext, Migrations
+│   │       ├── Data/
+│   │       ├── Models/
+│   │       └── Services/
+│   └── tests/
+│       ├── Gateway.Shared.Tests/        # Unit tests for RequestService
+│       ├── Gateway.Analytics.Tests/     # Unit tests for StatsService
+│       └── Gateway.IntegrationTests/    # API integration tests
+├── diagram/
+│   └── architecture.md
+└── data/                            # Persistent data (gitignored)
+    ├── postgres/
+    ├── certificates/
+    └── lettuce-encrypt/
 ```
 
-## Common Operations
+---
 
-### Service management
+## Operations
 
 ```bash
-# Start services
+# Start
 docker compose up -d
 
-# Stop services
+# Stop
 docker compose down
 
-# Restart services
-docker compose restart
+# View logs
+docker compose logs -f server
 
-# Restart only Nginx (after config changes)
-docker compose restart nginx_single_server
-```
+# Rebuild after code changes
+docker compose up -d --build
 
-### View logs
-
-```bash
-# All services
-docker compose logs -f
-
-# Nginx only
-docker compose logs -f nginx_single_server
-
-# Certbot only
-docker compose logs -f certbot
-```
-
-### Check service health
-
-```bash
-# Container status
-docker compose ps
+# Restart after config changes
+docker compose restart server
 
 # Health check
-curl http://yourdomain.com/healthcheck
+curl localhost/health
 ```
 
-### Certificate management
+---
+
+## Development
 
 ```bash
-# Check certificate status
-docker compose exec certbot certbot certificates
-
-# Force certificate renewal
-docker compose exec certbot certbot renew --force-renewal
-docker compose restart nginx_single_server
+cd server
+dotnet build Gateway.sln
+dotnet run --project src/Gateway  # http://localhost:5000
 ```
 
-### Nginx configuration
+---
+
+## Testing
 
 ```bash
-# Test Nginx configuration
-docker compose exec nginx_single_server nginx -t
+cd server
 
-# Reload Nginx (without restart)
-docker compose exec nginx_single_server nginx -s reload
+# Run all tests
+dotnet test
+
+# Run specific test project
+dotnet test tests/Gateway.Shared.Tests
+dotnet test tests/Gateway.Analytics.Tests
+dotnet test tests/Gateway.IntegrationTests
+
+# Run with verbose output
+dotnet test --logger "console;verbosity=detailed"
 ```
 
-## Troubleshooting
+### Test Projects
 
-### Certificate issues
+| Project | Type | Description |
+|---------|------|-------------|
+| Gateway.Shared.Tests | Unit | Tests for RequestService (CRUD operations) |
+| Gateway.Analytics.Tests | Unit | Tests for StatsService (aggregations, filters) |
+| Gateway.IntegrationTests | Integration | End-to-end API tests using WebApplicationFactory |
 
-```bash
-# Check certificate status
-docker compose exec certbot certbot certificates
+### Adding New Tests
 
-# View Certbot logs
-docker compose logs certbot
+1. **Unit tests**: Add to the corresponding `.Tests` project in `tests/`
+2. **Integration tests**: Add to `Gateway.IntegrationTests` using the `CustomWebApplicationFactory`
 
-# Check if certificates exist
-ls -la data/certbot/conf/live/
+Example unit test:
+
+```csharp
+[Fact]
+public async Task MyService_ShouldDoSomething()
+{
+    // Arrange
+    using var context = CreateInMemoryContext();
+    var service = new MyService(context);
+
+    // Act
+    var result = await service.DoSomething();
+
+    // Assert
+    Assert.NotNull(result);
+}
 ```
 
-### Nginx not starting
+---
 
-```bash
-# Test Nginx configuration for syntax errors
-docker compose exec nginx_single_server nginx -t
+## Tech Stack
 
-# View Nginx error logs
-cat data/logs/error.log
+- [YARP](https://github.com/microsoft/reverse-proxy) - Microsoft's reverse proxy
+- [LettuceEncrypt](https://github.com/natemcmaster/LettuceEncrypt) - Auto SSL certificates
+- PostgreSQL 16
+- .NET 10
 
-# Check if config files exist
-ls -la data/nginx/
-```
-
-### Port already in use
-
-Make sure ports 80 and 443 are not used by other services:
-
-```bash
-sudo lsof -i :80
-sudo lsof -i :443
-
-# Kill process using port (if needed)
-sudo kill -9 <PID>
-```
-
-### Domain not working after adding
-
-1. Check DNS is pointing to your server: `dig yourdomain.com`
-2. Check Nginx config was created: `ls data/nginx/`
-3. Check certificate exists: `ls data/certbot/conf/live/yourdomain.com/`
-4. Restart Nginx: `docker compose restart nginx_single_server`
-
-### SSL certificate not renewing
-
-```bash
-# Check renewal configuration
-cat data/certbot/conf/renewal/yourdomain.com.conf
-
-# Test renewal (dry run)
-docker compose exec certbot certbot renew --dry-run
-
-# Force renewal
-docker compose exec certbot certbot renew --force-renewal
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+---
 
 ## License
 
-This project is part of the Trufi Association initiative.
+Trufi Association
