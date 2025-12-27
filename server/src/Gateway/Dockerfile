@@ -1,15 +1,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 WORKDIR /src
 
-# Copy solution and project files
-COPY server/Gateway.sln .
+# Copy project files
 COPY server/src/Gateway/Gateway.csproj src/Gateway/
 COPY server/src/Gateway.Analytics/Gateway.Analytics.csproj src/Gateway.Analytics/
 COPY server/src/Gateway.Middleware/Gateway.Middleware.csproj src/Gateway.Middleware/
 COPY server/src/Gateway.Shared/Gateway.Shared.csproj src/Gateway.Shared/
 
-# Restore
-RUN dotnet restore
+# Restore (without solution file to skip test projects)
+RUN dotnet restore src/Gateway/Gateway.csproj
 
 # Copy source
 COPY server/src/ src/
