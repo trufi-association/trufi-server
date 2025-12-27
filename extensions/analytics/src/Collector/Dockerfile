@@ -10,6 +10,7 @@ COPY src/Collector/ src/Collector/
 RUN dotnet publish src/Collector/Collector.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine
+RUN apk add --no-cache wget
 WORKDIR /app
 COPY --from=build /app .
 EXPOSE 3000
