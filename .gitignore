@@ -1,4 +1,7 @@
-data/
+data/*
+!data/config/
+data/config/*
+!data/config/appsettings.json
 
 # Build results
 bin/

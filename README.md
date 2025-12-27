@@ -40,7 +40,9 @@ git clone https://github.com/trufi-association/trufi-server.git
 cd trufi-server
 ```
 
-### 2. Edit `server/src/Gateway/appsettings.json`
+### 2. Edit configuration
+
+Edit `data/config/appsettings.json`:
 
 ```json
 {
@@ -79,7 +81,7 @@ docker compose up -d
 
 ### Step 1: Add domain to SSL
 
-Edit `server/src/Gateway/appsettings.json` and add your domain to `LettuceEncrypt.DomainNames`:
+Edit `data/config/appsettings.json` and add your domain to `LettuceEncrypt.DomainNames`:
 
 ```json
 {
@@ -261,7 +263,6 @@ trufi-server/
 │   ├── src/
 │   │   ├── Gateway/                 # Host (YARP, SSL, Swagger)
 │   │   │   ├── Program.cs
-│   │   │   ├── appsettings.json     # <-- Configure here
 │   │   │   └── Dockerfile
 │   │   ├── Gateway.Analytics/       # Analytics API (logs, stats)
 │   │   │   ├── Controllers/
@@ -278,10 +279,12 @@ trufi-server/
 │       └── Gateway.IntegrationTests/    # API integration tests
 ├── diagram/
 │   └── architecture.md
-└── data/                            # Persistent data (gitignored)
-    ├── postgres/
-    ├── certificates/
-    └── lettuce-encrypt/
+└── data/
+    ├── config/
+    │   └── appsettings.json         # <-- Configure here (tracked)
+    ├── postgres/                    # (gitignored)
+    ├── certificates/                # (gitignored)
+    └── lettuce-encrypt/             # (gitignored)
 ```
 
 ---
