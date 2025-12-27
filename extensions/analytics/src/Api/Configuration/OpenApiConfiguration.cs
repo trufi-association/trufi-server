@@ -26,12 +26,10 @@ public static class OpenApiConfiguration
 
     public static WebApplication UseOpenApiConfiguration(this WebApplication app)
     {
-        var basePath = Environment.GetEnvironmentVariable("BASE_PATH") ?? "";
-
         app.MapOpenApi();
         app.UseSwaggerUI(options =>
         {
-            options.SwaggerEndpoint($"{basePath}/openapi/v1.json", "Analytics API");
+            options.SwaggerEndpoint("/openapi/v1.json", "Analytics API");
             options.RoutePrefix = "swagger";
         });
 

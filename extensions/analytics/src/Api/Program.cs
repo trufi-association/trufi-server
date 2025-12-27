@@ -20,12 +20,6 @@ public class Program
 
         var app = builder.Build();
 
-        var basePath = Environment.GetEnvironmentVariable("BASE_PATH") ?? "";
-        if (!string.IsNullOrEmpty(basePath))
-        {
-            app.UsePathBase(basePath);
-        }
-
         app.UseOpenApiConfiguration();
 
         if (!app.Environment.IsEnvironment("Testing"))
