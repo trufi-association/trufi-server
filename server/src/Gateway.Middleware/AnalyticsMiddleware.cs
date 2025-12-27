@@ -40,29 +40,27 @@ public class AnalyticsMiddleware
             context.Request.Body.Position = 0;
         }
 
-        // Log the request asynchronously (fire and forget)
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var dto = new CreateRequestDto(
-                    Method: context.Request.Method,
-                    Uri: context.Request.Path + context.Request.QueryString,
-                    Host: context.Request.Host.Value ?? "unknown",
-                    Ip: context.Connection.RemoteIpAddress?.ToString(),
-                    DeviceId: context.Request.Headers["X-Device-Id"].FirstOrDefault()
-                           ?? context.Request.Headers["Device-Id"].FirstOrDefault(),
-                    UserAgent: context.Request.Headers.UserAgent.FirstOrDefault(),
-                    Body: body
-                );
+        // Capture all data BEFORE the request completes (context will be disposed after)
+        var dto = new CreateRequestDto(
+            Method: context.Request.Method,
+            Uri: context.Request.Path + context.Request.QueryString,
+            Host: context.Request.Host.Value ?? "unknown",
+            Ip: context.Connection.RemoteIpAddress?.ToString(),
+            DeviceId: context.Request.Headers["X-Device-Id"].FirstOrDefault()
+                   ?? context.Request.Headers["Device-Id"].FirstOrDefault(),
+            UserAgent: context.Request.Headers.UserAgent.FirstOrDefault(),
+            Body: body
+        );
 
-                await requestService.CreateRequestAsync(dto);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to log request to analytics");
-            }
-        });
+        // Log the request synchronously (requestService is scoped, can't use after request ends)
+        try
+        {
+            await requestService.CreateRequestAsync(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to log request to analytics");
+        }
 
         await _next(context);
     }
