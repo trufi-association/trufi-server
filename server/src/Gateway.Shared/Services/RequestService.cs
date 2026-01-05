@@ -24,6 +24,8 @@ public class RequestService : IRequestService
             DeviceId = dto.DeviceId,
             UserAgent = dto.UserAgent,
             Body = dto.Body,
+            StatusCode = dto.StatusCode,
+            ResponseBody = dto.ResponseBody,
             ReceivedAt = DateTime.UtcNow
         };
 

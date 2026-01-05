@@ -31,37 +31,66 @@ public class AnalyticsMiddleware
         }
 
         // Read request body if present
-        string? body = null;
+        string? requestBody = null;
         if (context.Request.ContentLength > 0)
         {
             context.Request.EnableBuffering();
             using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-            body = await reader.ReadToEndAsync();
+            requestBody = await reader.ReadToEndAsync();
             context.Request.Body.Position = 0;
         }
 
-        // Capture all data BEFORE the request completes (context will be disposed after)
-        var dto = new CreateRequestDto(
-            Method: context.Request.Method,
-            Uri: context.Request.Path + context.Request.QueryString,
-            Host: context.Request.Host.Value ?? "unknown",
-            Ip: context.Connection.RemoteIpAddress?.ToString(),
-            DeviceId: context.Request.Headers["X-Device-Id"].FirstOrDefault()
-                   ?? context.Request.Headers["Device-Id"].FirstOrDefault(),
-            UserAgent: context.Request.Headers.UserAgent.FirstOrDefault(),
-            Body: body
-        );
+        // Capture request data before processing
+        var method = context.Request.Method;
+        var uri = context.Request.Path + context.Request.QueryString;
+        var host = context.Request.Host.Value ?? "unknown";
+        var ip = context.Connection.RemoteIpAddress?.ToString();
+        var deviceId = context.Request.Headers["X-Device-Id"].FirstOrDefault()
+                    ?? context.Request.Headers["Device-Id"].FirstOrDefault();
+        var userAgent = context.Request.Headers.UserAgent.FirstOrDefault();
 
-        // Log the request synchronously (requestService is scoped, can't use after request ends)
+        // Replace response body stream to capture the response
+        var originalBodyStream = context.Response.Body;
+        using var responseBodyStream = new MemoryStream();
+        context.Response.Body = responseBodyStream;
+
         try
         {
-            await requestService.CreateRequestAsync(dto);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to log request to analytics");
-        }
+            await _next(context);
 
-        await _next(context);
+            // Read the response body
+            responseBodyStream.Seek(0, SeekOrigin.Begin);
+            var responseBody = await new StreamReader(responseBodyStream).ReadToEndAsync();
+            responseBodyStream.Seek(0, SeekOrigin.Begin);
+
+            // Copy response back to original stream
+            await responseBodyStream.CopyToAsync(originalBodyStream);
+
+            // Log the request with response data
+            var dto = new CreateRequestDto(
+                Method: method,
+                Uri: uri,
+                Host: host,
+                Ip: ip,
+                DeviceId: deviceId,
+                UserAgent: userAgent,
+                Body: requestBody,
+                StatusCode: context.Response.StatusCode,
+                ResponseBody: responseBody
+            );
+
+            try
+            {
+                await requestService.CreateRequestAsync(dto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to log request to analytics");
+            }
+        }
+        finally
+        {
+            context.Response.Body = originalBodyStream;
+        }
     }
 }

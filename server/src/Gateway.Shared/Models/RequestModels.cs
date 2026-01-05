@@ -7,7 +7,9 @@ public record CreateRequestDto(
     string? Ip,
     string? DeviceId,
     string? UserAgent,
-    string? Body
+    string? Body,
+    int? StatusCode = null,
+    string? ResponseBody = null
 );
 
 public record RequestFilter(
