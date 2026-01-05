@@ -2,5 +2,6 @@
   "name": "example-service",
   "description": "Example service configuration for trufi-server",
   "container": "example-service",
-  "port": 8080
+  "port": 8080,
+  "analytics": true
 }

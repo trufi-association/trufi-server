@@ -121,6 +121,7 @@ add_external_service() {
     local description=$(jq -r '.description // ""' "$proxy_file")
     local port=$(jq -r '.port // ""' "$proxy_file")
     local container=$(jq -r '.container // ""' "$proxy_file")
+    local analytics=$(jq -r '.analytics // false' "$proxy_file")
 
     # Validate required fields
     if [ -z "$name" ] || [ "$name" == "null" ]; then
@@ -148,6 +149,7 @@ add_external_service() {
     [ -n "$description" ] && echo "  $description"
     echo "  Container: $container"
     echo "  Port: $port"
+    echo "  Analytics: $analytics"
     echo ""
 
     read -p "Full domain for this service (e.g., photon.trufi.app): " full_domain
@@ -157,7 +159,7 @@ add_external_service() {
         return 1
     fi
 
-    add_service_to_config "$name" "$full_domain" "$port" "$container"
+    add_service_to_config "$name" "$full_domain" "$port" "$container" "$analytics"
 }
 
 # Add analytics API (internal service)
@@ -223,6 +225,7 @@ add_service_to_config() {
     local full_domain="$2"
     local port="$3"
     local container="${4:-$name}"  # Default container name = service name
+    local analytics="${5:-false}"  # Default analytics = false
 
     # Check if service already exists
     if jq -e ".ReverseProxy.Routes[\"$name\"]" "$CONFIG_FILE" > /dev/null 2>&1; then
@@ -241,11 +244,12 @@ add_service_to_config() {
         end
     ' "$CONFIG_FILE" > "$temp_file" && mv "$temp_file" "$CONFIG_FILE"
 
-    # Add route
-    jq --arg name "$name" --arg domain "$full_domain" '
+    # Add route with analytics metadata
+    jq --arg name "$name" --arg domain "$full_domain" --arg analytics "$analytics" '
         .ReverseProxy.Routes[$name] = {
             "ClusterId": $name,
-            "Match": { "Hosts": [$domain] }
+            "Match": { "Hosts": [$domain] },
+            "Metadata": { "Analytics": $analytics }
         }
     ' "$CONFIG_FILE" > "$temp_file" && mv "$temp_file" "$CONFIG_FILE"
 
@@ -264,6 +268,7 @@ add_service_to_config() {
     echo "Added to appsettings.json:"
     echo "  - Domain: $full_domain"
     echo "  - Backend: http://$container:$port"
+    echo "  - Analytics: $analytics"
     echo ""
     echo -e "${YELLOW}Remember:${NC}"
     echo "  1. Ensure '$name' service uses network 'trufi-server'"

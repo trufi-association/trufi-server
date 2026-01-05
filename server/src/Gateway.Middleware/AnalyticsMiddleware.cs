@@ -2,6 +2,7 @@ using Gateway.Shared.Models;
 using Gateway.Shared.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Yarp.ReverseProxy.Configuration;
 
 namespace Gateway.Middleware;
 
@@ -19,12 +20,20 @@ public class AnalyticsMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, IRequestService requestService)
+    public async Task InvokeAsync(HttpContext context, IRequestService requestService, IProxyConfigProvider proxyConfigProvider)
     {
         var path = context.Request.Path.Value ?? "";
 
         // Skip analytics for excluded paths
         if (ExcludedPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            await _next(context);
+            return;
+        }
+
+        // Check if analytics is enabled for this route based on host
+        var host = context.Request.Host.Value ?? "unknown";
+        if (!IsAnalyticsEnabled(proxyConfigProvider, host))
         {
             await _next(context);
             return;
@@ -43,7 +52,6 @@ public class AnalyticsMiddleware
         // Capture request data before processing
         var method = context.Request.Method;
         var uri = context.Request.Path + context.Request.QueryString;
-        var host = context.Request.Host.Value ?? "unknown";
         var ip = context.Connection.RemoteIpAddress?.ToString();
         var deviceId = context.Request.Headers["X-Device-Id"].FirstOrDefault()
                     ?? context.Request.Headers["Device-Id"].FirstOrDefault();
@@ -92,5 +100,21 @@ public class AnalyticsMiddleware
         {
             context.Response.Body = originalBodyStream;
         }
+    }
+
+    private static bool IsAnalyticsEnabled(IProxyConfigProvider proxyConfigProvider, string host)
+    {
+        var config = proxyConfigProvider.GetConfig();
+
+        // Find route that matches this host
+        var route = config.Routes.FirstOrDefault(r =>
+            r.Match.Hosts?.Any(h => h.Equals(host, StringComparison.OrdinalIgnoreCase)) == true);
+
+        if (route?.Metadata == null)
+            return false;
+
+        // Check Analytics metadata (default: false)
+        return route.Metadata.TryGetValue("Analytics", out var value)
+            && value.Equals("true", StringComparison.OrdinalIgnoreCase);
     }
 }
