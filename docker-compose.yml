@@ -18,7 +18,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD-SHELL", "cat < /dev/tcp/localhost/80 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

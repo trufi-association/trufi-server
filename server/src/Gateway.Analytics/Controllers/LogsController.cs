@@ -38,6 +38,8 @@ public class LogsController : ControllerBase
             r.DeviceId,
             r.UserAgent,
             r.Body,
+            r.StatusCode,
+            r.ResponseBody,
             r.ReceivedAt
         }));
     }
