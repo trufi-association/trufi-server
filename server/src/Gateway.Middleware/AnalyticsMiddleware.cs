@@ -2,6 +2,7 @@ using Gateway.Shared.Models;
 using Gateway.Shared.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using Yarp.ReverseProxy.Configuration;
 
 namespace Gateway.Middleware;
@@ -20,7 +21,7 @@ public class AnalyticsMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, IRequestService requestService, IProxyConfigProvider proxyConfigProvider)
+    public async Task InvokeAsync(HttpContext context, RequestLogQueue requestLogQueue, IProxyConfigProvider proxyConfigProvider)
     {
         var path = context.Request.Path.Value ?? "";
 
@@ -39,16 +40,6 @@ public class AnalyticsMiddleware
             return;
         }
 
-        // Read request body if present
-        string? requestBody = null;
-        if (context.Request.ContentLength > 0)
-        {
-            context.Request.EnableBuffering();
-            using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-            requestBody = await reader.ReadToEndAsync();
-            context.Request.Body.Position = 0;
-        }
-
         // Capture request data before processing
         var method = context.Request.Method;
         var uri = context.Request.Path + context.Request.QueryString;
@@ -56,6 +47,31 @@ public class AnalyticsMiddleware
         var deviceId = context.Request.Headers["X-Device-Id"].FirstOrDefault()
                     ?? context.Request.Headers["Device-Id"].FirstOrDefault();
         var userAgent = context.Request.Headers.UserAgent.FirstOrDefault();
+
+        // Capturar todos los headers y content-type del request
+        var requestHeaders = SerializeHeaders(context.Request.Headers);
+        var requestContentType = context.Request.ContentType;
+
+        // Read request body if present
+        string? requestBody = null;
+        if (context.Request.ContentLength > 0)
+        {
+            if (PayloadHelper.ExceedsMaxSize(context.Request.ContentLength))
+            {
+                // Payload muy grande - guardar solo metadata
+                requestBody = PayloadHelper.CreateLargePayloadPlaceholder(
+                    requestContentType,
+                    context.Request.ContentLength.Value);
+            }
+            else
+            {
+                // Payload normal - guardar completo
+                context.Request.EnableBuffering();
+                using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
+                requestBody = await reader.ReadToEndAsync();
+                context.Request.Body.Position = 0;
+            }
+        }
 
         // Replace response body stream to capture the response
         var originalBodyStream = context.Response.Body;
@@ -66,9 +82,30 @@ public class AnalyticsMiddleware
         {
             await _next(context);
 
+            // Capturar headers y content-type del response
+            var responseHeaders = SerializeHeaders(context.Response.Headers);
+            var responseContentType = context.Response.ContentType;
+
             // Read the response body
             responseBodyStream.Seek(0, SeekOrigin.Begin);
-            var responseBody = await new StreamReader(responseBodyStream).ReadToEndAsync();
+
+            string? responseBody = null;
+            if (responseBodyStream.Length > 0)
+            {
+                if (PayloadHelper.ExceedsMaxSize(responseBodyStream.Length))
+                {
+                    // Response muy grande - guardar solo metadata
+                    responseBody = PayloadHelper.CreateLargePayloadPlaceholder(
+                        responseContentType,
+                        responseBodyStream.Length);
+                }
+                else
+                {
+                    // Response normal - guardar completo
+                    responseBody = await new StreamReader(responseBodyStream).ReadToEndAsync();
+                }
+            }
+
             responseBodyStream.Seek(0, SeekOrigin.Begin);
 
             // Copy response back to original stream
@@ -82,18 +119,23 @@ public class AnalyticsMiddleware
                 Ip: ip,
                 DeviceId: deviceId,
                 UserAgent: userAgent,
+                RequestContentType: requestContentType,
+                RequestHeaders: requestHeaders,
                 Body: requestBody,
                 StatusCode: context.Response.StatusCode,
+                ResponseContentType: responseContentType,
+                ResponseHeaders: responseHeaders,
                 ResponseBody: responseBody
             );
 
+            // Enqueue for async processing (< 1ms, non-blocking)
             try
             {
-                await requestService.CreateRequestAsync(dto);
+                await requestLogQueue.EnqueueAsync(dto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to log request to analytics");
+                _logger.LogError(ex, "Failed to enqueue request to analytics queue");
             }
         }
         finally
@@ -116,5 +158,15 @@ public class AnalyticsMiddleware
         // Check Analytics metadata (default: false)
         return route.Metadata.TryGetValue("Analytics", out var value)
             && value.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string SerializeHeaders(IHeaderDictionary headers)
+    {
+        var headerDict = new Dictionary<string, string[]>();
+        foreach (var header in headers)
+        {
+            headerDict[header.Key] = header.Value.Where(v => v != null).ToArray()!;
+        }
+        return JsonSerializer.Serialize(headerDict);
     }
 }

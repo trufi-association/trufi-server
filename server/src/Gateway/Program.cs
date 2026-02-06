@@ -14,6 +14,10 @@ builder.Services.AddDbContext<AnalyticsDbContext>(options =>
 builder.Services.AddScoped<IRequestService, RequestService>();
 builder.Services.AddScoped<IStatsService, StatsService>();
 
+// Async Request Logging (High Performance)
+builder.Services.AddSingleton<RequestLogQueue>();
+builder.Services.AddHostedService<RequestLogWriter>();
+
 // Controllers (Analytics API)
 builder.Services.AddControllers()
     .AddApplicationPart(typeof(Gateway.Analytics.Controllers.LogsController).Assembly);

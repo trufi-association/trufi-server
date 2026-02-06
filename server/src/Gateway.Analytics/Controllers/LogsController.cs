@@ -37,8 +37,12 @@ public class LogsController : ControllerBase
             r.Ip,
             r.DeviceId,
             r.UserAgent,
+            r.RequestContentType,
+            r.RequestHeaders,
             r.Body,
             r.StatusCode,
+            r.ResponseContentType,
+            r.ResponseHeaders,
             r.ResponseBody,
             r.ReceivedAt
         }));

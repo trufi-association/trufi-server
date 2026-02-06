@@ -7,8 +7,12 @@ public record CreateRequestDto(
     string? Ip,
     string? DeviceId,
     string? UserAgent,
+    string? RequestContentType,
+    string? RequestHeaders,
     string? Body,
     int? StatusCode = null,
+    string? ResponseContentType = null,
+    string? ResponseHeaders = null,
     string? ResponseBody = null
 );
 
