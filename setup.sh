@@ -79,7 +79,8 @@ initial_setup() {
   "LettuceEncrypt": {
     "AcceptTermsOfService": true,
     "DomainNames": [],
-    "EmailAddress": "$email"
+    "EmailAddress": "$email",
+    "CertificateStoragePath": "/etc/lettuce-encrypt"
   },
   "ReverseProxy": {
     "Routes": {},
