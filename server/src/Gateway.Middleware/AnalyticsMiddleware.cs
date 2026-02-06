@@ -56,21 +56,27 @@ public class AnalyticsMiddleware
         string? requestBody = null;
         if (context.Request.ContentLength > 0)
         {
-            if (PayloadHelper.ExceedsMaxSize(context.Request.ContentLength))
+            if (PayloadHelper.IsBinaryContent(requestContentType))
+            {
+                // Contenido binario - no guardar nada (evita error UTF-8 en PostgreSQL)
+                requestBody = null;
+            }
+            else if (PayloadHelper.ExceedsMaxSize(context.Request.ContentLength))
             {
                 // Payload muy grande - guardar solo metadata
                 requestBody = PayloadHelper.CreateLargePayloadPlaceholder(
                     requestContentType,
                     context.Request.ContentLength.Value);
             }
-            else
+            else if (PayloadHelper.IsTextContent(requestContentType))
             {
-                // Payload normal - guardar completo
+                // Payload de texto/JSON - guardar completo
                 context.Request.EnableBuffering();
                 using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
                 requestBody = await reader.ReadToEndAsync();
                 context.Request.Body.Position = 0;
             }
+            // Content-type desconocido - no guardar nada por seguridad (null)
         }
 
         // Replace response body stream to capture the response
@@ -92,18 +98,24 @@ public class AnalyticsMiddleware
             string? responseBody = null;
             if (responseBodyStream.Length > 0)
             {
-                if (PayloadHelper.ExceedsMaxSize(responseBodyStream.Length))
+                if (PayloadHelper.IsBinaryContent(responseContentType))
+                {
+                    // Contenido binario - no guardar nada (evita error UTF-8 en PostgreSQL)
+                    responseBody = null;
+                }
+                else if (PayloadHelper.ExceedsMaxSize(responseBodyStream.Length))
                 {
                     // Response muy grande - guardar solo metadata
                     responseBody = PayloadHelper.CreateLargePayloadPlaceholder(
                         responseContentType,
                         responseBodyStream.Length);
                 }
-                else
+                else if (PayloadHelper.IsTextContent(responseContentType))
                 {
-                    // Response normal - guardar completo
+                    // Response de texto/JSON - guardar completo
                     responseBody = await new StreamReader(responseBodyStream).ReadToEndAsync();
                 }
+                // Content-type desconocido - no guardar nada por seguridad (null)
             }
 
             responseBodyStream.Seek(0, SeekOrigin.Begin);
