@@ -48,7 +48,7 @@ public class AnalyticsMiddleware
                     ?? context.Request.Headers["Device-Id"].FirstOrDefault();
         var userAgent = context.Request.Headers.UserAgent.FirstOrDefault();
 
-        // Capturar todos los headers y content-type del request
+        // Capture all headers and content-type from request
         var requestHeaders = SerializeHeaders(context.Request.Headers);
         var requestContentType = context.Request.ContentType;
 
@@ -58,25 +58,26 @@ public class AnalyticsMiddleware
         {
             if (PayloadHelper.IsBinaryContent(requestContentType))
             {
-                // Contenido binario - no guardar nada (evita error UTF-8 en PostgreSQL)
+                // Binary content - don't save (prevents UTF-8 error in PostgreSQL)
                 requestBody = null;
             }
             else if (PayloadHelper.ExceedsMaxSize(context.Request.ContentLength))
             {
-                // Payload muy grande - guardar solo metadata
+                // Large payload - save only metadata
                 requestBody = PayloadHelper.CreateLargePayloadPlaceholder(
                     requestContentType,
                     context.Request.ContentLength.Value);
             }
             else if (PayloadHelper.IsTextContent(requestContentType))
             {
-                // Payload de texto/JSON - guardar completo
+                // Text/JSON payload - save complete (sanitized)
                 context.Request.EnableBuffering();
                 using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-                requestBody = await reader.ReadToEndAsync();
+                var rawBody = await reader.ReadToEndAsync();
+                requestBody = PayloadHelper.SanitizeString(rawBody);
                 context.Request.Body.Position = 0;
             }
-            // Content-type desconocido - no guardar nada por seguridad (null)
+            // Unknown content-type - don't save for safety (null)
         }
 
         // Replace response body stream to capture the response
@@ -88,7 +89,7 @@ public class AnalyticsMiddleware
         {
             await _next(context);
 
-            // Capturar headers y content-type del response
+            // Capture headers and content-type from response
             var responseHeaders = SerializeHeaders(context.Response.Headers);
             var responseContentType = context.Response.ContentType;
 
@@ -100,22 +101,23 @@ public class AnalyticsMiddleware
             {
                 if (PayloadHelper.IsBinaryContent(responseContentType))
                 {
-                    // Contenido binario - no guardar nada (evita error UTF-8 en PostgreSQL)
+                    // Binary content - don't save (prevents UTF-8 error in PostgreSQL)
                     responseBody = null;
                 }
                 else if (PayloadHelper.ExceedsMaxSize(responseBodyStream.Length))
                 {
-                    // Response muy grande - guardar solo metadata
+                    // Large response - save only metadata
                     responseBody = PayloadHelper.CreateLargePayloadPlaceholder(
                         responseContentType,
                         responseBodyStream.Length);
                 }
                 else if (PayloadHelper.IsTextContent(responseContentType))
                 {
-                    // Response de texto/JSON - guardar completo
-                    responseBody = await new StreamReader(responseBodyStream).ReadToEndAsync();
+                    // Text/JSON response - save complete (sanitized)
+                    var rawBody = await new StreamReader(responseBodyStream).ReadToEndAsync();
+                    responseBody = PayloadHelper.SanitizeString(rawBody);
                 }
-                // Content-type desconocido - no guardar nada por seguridad (null)
+                // Unknown content-type - don't save for safety (null)
             }
 
             responseBodyStream.Seek(0, SeekOrigin.Begin);
@@ -123,21 +125,21 @@ public class AnalyticsMiddleware
             // Copy response back to original stream
             await responseBodyStream.CopyToAsync(originalBodyStream);
 
-            // Log the request with response data
+            // Log the request with response data (sanitize ALL strings)
             var dto = new CreateRequestDto(
-                Method: method,
-                Uri: uri,
-                Host: host,
-                Ip: ip,
-                DeviceId: deviceId,
-                UserAgent: userAgent,
-                RequestContentType: requestContentType,
-                RequestHeaders: requestHeaders,
-                Body: requestBody,
+                Method: PayloadHelper.SanitizeString(method) ?? method,
+                Uri: PayloadHelper.SanitizeString(uri) ?? uri,
+                Host: PayloadHelper.SanitizeString(host) ?? host,
+                Ip: PayloadHelper.SanitizeString(ip),
+                DeviceId: PayloadHelper.SanitizeString(deviceId),
+                UserAgent: PayloadHelper.SanitizeString(userAgent),
+                RequestContentType: PayloadHelper.SanitizeString(requestContentType),
+                RequestHeaders: requestHeaders, // Already sanitized in SerializeHeaders
+                Body: requestBody, // Already sanitized when read
                 StatusCode: context.Response.StatusCode,
-                ResponseContentType: responseContentType,
-                ResponseHeaders: responseHeaders,
-                ResponseBody: responseBody
+                ResponseContentType: PayloadHelper.SanitizeString(responseContentType),
+                ResponseHeaders: responseHeaders, // Already sanitized in SerializeHeaders
+                ResponseBody: responseBody // Already sanitized when read
             );
 
             // Enqueue for async processing (< 1ms, non-blocking)
@@ -177,7 +179,13 @@ public class AnalyticsMiddleware
         var headerDict = new Dictionary<string, string[]>();
         foreach (var header in headers)
         {
-            headerDict[header.Key] = header.Value.Where(v => v != null).ToArray()!;
+            // Sanitize header values to remove null bytes
+            var sanitizedValues = header.Value
+                .Where(v => v != null)
+                .Select(v => PayloadHelper.SanitizeString(v) ?? string.Empty)
+                .ToArray();
+
+            headerDict[header.Key] = sanitizedValues;
         }
         return JsonSerializer.Serialize(headerDict);
     }

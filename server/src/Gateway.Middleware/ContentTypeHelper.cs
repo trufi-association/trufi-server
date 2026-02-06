@@ -2,22 +2,22 @@ namespace Gateway.Middleware;
 
 public static class PayloadHelper
 {
-    // Límite prudente: 1MB
+    // Reasonable limit: 1MB
     public const int MaxPayloadSize = 1_048_576; // 1 MB
 
     /// <summary>
-    /// Detecta si el content-type es binario (imágenes, videos, PDFs, etc.)
-    /// que no debería ser guardado como texto en PostgreSQL.
+    /// Detects if the content-type is binary (images, videos, PDFs, etc.)
+    /// that should not be saved as text in PostgreSQL.
     /// </summary>
     public static bool IsBinaryContent(string? contentType)
     {
         if (string.IsNullOrEmpty(contentType))
             return false;
 
-        // Extraer el tipo base (sin charset, boundary, etc)
+        // Extract base type (without charset, boundary, etc)
         var baseType = contentType.Split(';')[0].Trim();
 
-        // Tipos binarios comunes que causan problemas con PostgreSQL UTF-8
+        // Common binary types that cause problems with PostgreSQL UTF-8
         return baseType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
                baseType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
                baseType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ||
@@ -29,7 +29,7 @@ public static class PayloadHelper
     }
 
     /// <summary>
-    /// Detecta si el content-type es texto/JSON que puede ser guardado en PostgreSQL.
+    /// Detects if the content-type is text/JSON that can be safely saved in PostgreSQL.
     /// </summary>
     public static bool IsTextContent(string? contentType)
     {
@@ -63,6 +63,18 @@ public static class PayloadHelper
     public static bool ExceedsMaxSize(long? contentLength)
     {
         return contentLength.HasValue && contentLength.Value > MaxPayloadSize;
+    }
+
+    /// <summary>
+    /// Sanitizes a string by removing null characters (0x00) that cause errors in PostgreSQL.
+    /// </summary>
+    public static string? SanitizeString(string? input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        // Remove all null characters (0x00) that cause UTF-8 encoding errors in PostgreSQL
+        return input.Replace("\0", string.Empty);
     }
 
     private static string FormatBytes(long bytes)
