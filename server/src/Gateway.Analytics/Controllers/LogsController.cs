@@ -22,10 +22,18 @@ public class LogsController : ControllerBase
         string? host,
         string? method,
         string? deviceId,
+        int? statusCode,
+        string? ip,
+        string? search,
+        string? uriContains,
+        string? headerContains,
+        string? bodyContains,
         int limit = 100,
         int offset = 0)
     {
-        var filter = new RequestFilter(from, to, host, method, deviceId, limit, offset);
+        var filter = new RequestFilter(from, to, host, method, deviceId,
+            statusCode, ip, search, uriContains, headerContains, bodyContains,
+            limit, offset);
         var results = await _requestService.GetRequestsAsync(filter);
 
         return Ok(results.Select(r => new

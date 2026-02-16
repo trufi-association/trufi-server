@@ -22,6 +22,12 @@ public record RequestFilter(
     string? Host = null,
     string? Method = null,
     string? DeviceId = null,
+    int? StatusCode = null,
+    string? Ip = null,
+    string? Search = null,
+    string? UriContains = null,
+    string? HeaderContains = null,
+    string? BodyContains = null,
     int Limit = 100,
     int Offset = 0
 );

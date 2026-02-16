@@ -53,6 +53,27 @@ public class RequestService : IRequestService
             query = query.Where(r => r.Method == filter.Method);
         if (!string.IsNullOrEmpty(filter.DeviceId))
             query = query.Where(r => r.DeviceId == filter.DeviceId);
+        if (filter.StatusCode.HasValue)
+            query = query.Where(r => r.StatusCode == filter.StatusCode.Value);
+        if (!string.IsNullOrEmpty(filter.Ip))
+            query = query.Where(r => r.Ip == filter.Ip);
+        if (!string.IsNullOrEmpty(filter.UriContains))
+            query = query.Where(r => r.Uri.Contains(filter.UriContains));
+        if (!string.IsNullOrEmpty(filter.HeaderContains))
+            query = query.Where(r =>
+                (r.RequestHeaders != null && r.RequestHeaders.Contains(filter.HeaderContains)) ||
+                (r.ResponseHeaders != null && r.ResponseHeaders.Contains(filter.HeaderContains)));
+        if (!string.IsNullOrEmpty(filter.BodyContains))
+            query = query.Where(r =>
+                (r.Body != null && r.Body.Contains(filter.BodyContains)) ||
+                (r.ResponseBody != null && r.ResponseBody.Contains(filter.BodyContains)));
+        if (!string.IsNullOrEmpty(filter.Search))
+            query = query.Where(r =>
+                r.Uri.Contains(filter.Search) ||
+                (r.RequestHeaders != null && r.RequestHeaders.Contains(filter.Search)) ||
+                (r.ResponseHeaders != null && r.ResponseHeaders.Contains(filter.Search)) ||
+                (r.Body != null && r.Body.Contains(filter.Search)) ||
+                (r.ResponseBody != null && r.ResponseBody.Contains(filter.Search)));
 
         return await query
             .OrderByDescending(r => r.ReceivedAt)
