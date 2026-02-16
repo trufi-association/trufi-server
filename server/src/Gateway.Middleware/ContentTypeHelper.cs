@@ -29,21 +29,16 @@ public static class PayloadHelper
     }
 
     /// <summary>
-    /// Detects if the content-type is text/JSON that can be safely saved in PostgreSQL.
+    /// Detects if the content-type is JSON that should be saved in PostgreSQL.
     /// </summary>
-    public static bool IsTextContent(string? contentType)
+    public static bool IsJsonContent(string? contentType)
     {
         if (string.IsNullOrEmpty(contentType))
             return false;
 
         var baseType = contentType.Split(';')[0].Trim();
 
-        return baseType.Equals("application/json", StringComparison.OrdinalIgnoreCase) ||
-               baseType.Equals("text/plain", StringComparison.OrdinalIgnoreCase) ||
-               baseType.Equals("text/html", StringComparison.OrdinalIgnoreCase) ||
-               baseType.Equals("text/xml", StringComparison.OrdinalIgnoreCase) ||
-               baseType.Equals("application/xml", StringComparison.OrdinalIgnoreCase) ||
-               baseType.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
+        return baseType.Equals("application/json", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string CreateLargePayloadPlaceholder(string? contentType, long contentLength)

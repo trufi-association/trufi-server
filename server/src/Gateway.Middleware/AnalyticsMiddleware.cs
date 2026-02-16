@@ -2,6 +2,7 @@ using Gateway.Shared.Models;
 using Gateway.Shared.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using System.IO.Compression;
 using System.Text.Json;
 using Yarp.ReverseProxy.Configuration;
 
@@ -68,11 +69,15 @@ public class AnalyticsMiddleware
                     requestContentType,
                     context.Request.ContentLength.Value);
             }
-            else if (PayloadHelper.IsTextContent(requestContentType))
+            else if (PayloadHelper.IsJsonContent(requestContentType))
             {
                 // Text/JSON payload - save complete (sanitized)
                 context.Request.EnableBuffering();
-                using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
+                // Decompress if Content-Encoding is present (gzip, deflate, br)
+                var decompressedStream = GetDecompressedStream(
+                    context.Request.Body,
+                    context.Request.Headers.ContentEncoding.FirstOrDefault());
+                using var reader = new StreamReader(decompressedStream, leaveOpen: true);
                 var rawBody = await reader.ReadToEndAsync();
                 requestBody = PayloadHelper.SanitizeString(rawBody);
                 context.Request.Body.Position = 0;
@@ -111,10 +116,14 @@ public class AnalyticsMiddleware
                         responseContentType,
                         responseBodyStream.Length);
                 }
-                else if (PayloadHelper.IsTextContent(responseContentType))
+                else if (PayloadHelper.IsJsonContent(responseContentType))
                 {
-                    // Text/JSON response - save complete (sanitized)
-                    var rawBody = await new StreamReader(responseBodyStream).ReadToEndAsync();
+                    // Decompress if Content-Encoding is present (gzip, deflate, br)
+                    var decompressedStream = GetDecompressedStream(
+                        responseBodyStream,
+                        context.Response.Headers.ContentEncoding.FirstOrDefault());
+                    using var reader = new StreamReader(decompressedStream, leaveOpen: true);
+                    var rawBody = await reader.ReadToEndAsync();
                     responseBody = PayloadHelper.SanitizeString(rawBody);
                 }
                 // Unknown content-type - don't save for safety (null)
@@ -172,6 +181,24 @@ public class AnalyticsMiddleware
         // Check Analytics metadata (default: false)
         return route.Metadata.TryGetValue("Analytics", out var value)
             && value.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns a decompressed stream if Content-Encoding is gzip, deflate, or br.
+    /// Otherwise returns the original stream unchanged.
+    /// </summary>
+    private static Stream GetDecompressedStream(Stream stream, string? contentEncoding)
+    {
+        if (string.IsNullOrEmpty(contentEncoding))
+            return stream;
+
+        return contentEncoding.ToLowerInvariant() switch
+        {
+            "gzip" => new GZipStream(stream, CompressionMode.Decompress, leaveOpen: true),
+            "deflate" => new DeflateStream(stream, CompressionMode.Decompress, leaveOpen: true),
+            "br" => new BrotliStream(stream, CompressionMode.Decompress, leaveOpen: true),
+            _ => stream
+        };
     }
 
     private static string SerializeHeaders(IHeaderDictionary headers)
