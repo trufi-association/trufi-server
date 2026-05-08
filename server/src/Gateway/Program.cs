@@ -26,6 +26,24 @@ builder.Services.AddControllers()
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
+// Permissive CORS so the planner web build (browser) can call OTP
+// 1.5 / OTP 2.8 endpoints proxied through this gateway. Without
+// this, browsers block cross-origin XHR with "No
+// Access-Control-Allow-Origin header" because OTP itself doesn't
+// emit CORS headers and YARP doesn't add them either. The Trufi
+// Planner remote (`/api`) emits CORS itself, which is why that one
+// already worked from the web — only the OTP-backed routes needed
+// help.
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 // Let's Encrypt (only in production)
 if (!builder.Environment.IsDevelopment())
 {
@@ -62,6 +80,8 @@ app.UseMiddleware<AnalyticsMiddleware>();
 
 // Map controllers (Analytics API endpoints)
 app.MapControllers();
+
+app.UseCors();
 
 // YARP reverse proxy
 app.MapReverseProxy();
