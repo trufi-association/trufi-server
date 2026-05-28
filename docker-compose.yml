@@ -12,6 +12,7 @@ services:
     volumes:
       - ./data/certificates:/root/.aspnet/https
       - ./data/lettuce-encrypt:/etc/lettuce-encrypt
+      - ./data/dotnet-x509:/root/.dotnet/corefx/cryptography
       - ./data/config/appsettings.json:/app/appsettings.json:ro
     depends_on:
       db:
