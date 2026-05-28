@@ -26,6 +26,29 @@ builder.Services.AddControllers()
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
+// CORS: allow browser-side callers whose Origin host matches one of the
+// domains this gateway is configured to serve (LettuceEncrypt.DomainNames).
+// This keeps the policy generic across deployments — each deployer's own
+// domains automatically become the CORS allowlist, with no extra config.
+var allowedHosts = (builder.Configuration
+        .GetSection("LettuceEncrypt:DomainNames")
+        .Get<string[]>() ?? Array.Empty<string>())
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.SetIsOriginAllowed(origin =>
+              {
+                  if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+                  return allowedHosts.Contains(uri.Host);
+              })
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 // Let's Encrypt (only in production)
 if (!builder.Environment.IsDevelopment())
 {
@@ -62,6 +85,8 @@ app.UseMiddleware<AnalyticsMiddleware>();
 
 // Map controllers (Analytics API endpoints)
 app.MapControllers();
+
+app.UseCors();
 
 // YARP reverse proxy
 app.MapReverseProxy();
