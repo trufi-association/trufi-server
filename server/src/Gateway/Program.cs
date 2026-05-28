@@ -42,11 +42,11 @@ builder.Services.AddCors(options =>
         policy.SetIsOriginAllowed(origin =>
               {
                   if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
-                  // Always allow loopback origins so developers can hit
-                  // this gateway from `flutter run -d web-server` (or any
-                  // local dev server) without having to add their machine
-                  // to the configured DomainNames list.
-                  if (uri.Host == "localhost" || uri.Host == "127.0.0.1") return true;
+                  // Always allow localhost so developers can hit this
+                  // gateway from `flutter run -d web-server` (or any
+                  // local dev server) without having to add their
+                  // machine to the configured DomainNames list.
+                  if (uri.Host == "localhost") return true;
                   return allowedHosts.Contains(uri.Host);
               })
               .AllowAnyMethod()
