@@ -52,6 +52,8 @@ public class RequestServiceTests
         Assert.Equal("/api/test", result.Uri);
         Assert.Equal("example.com", result.Host);
         Assert.Equal("device-123", result.DeviceId);
+        Assert.Equal("127.0.0.1", result.Ip);
+        Assert.Equal("TestAgent", result.UserAgent);
         Assert.Equal("application/json", result.RequestContentType);
         Assert.Equal("{\"Accept\":\"application/json\"}", result.RequestHeaders);
         Assert.Equal("{\"q\":1}", result.Body);
