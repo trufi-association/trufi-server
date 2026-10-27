@@ -152,15 +152,42 @@ public class AnalyticsMiddlewareTests
         Assert.Null(logged!.ResponseBody);
     }
 
-    [Fact]
-    public async Task A_body_that_does_not_decompress_is_logged_as_null_not_as_an_error()
+    // deflate is not in the list on purpose: a raw DEFLATE decoder accepts
+    // almost any byte sequence as a stream, so garbage comes out as garbage
+    // text rather than as an exception.
+    [Theory]
+    [InlineData("gzip")]
+    [InlineData("br")] // BrotliStream throws InvalidOperationException, not InvalidDataException
+    public async Task A_body_that_does_not_decompress_is_logged_as_null_not_as_an_error(string encoding)
     {
-        var garbage = Encoding.UTF8.GetBytes("{\"not\":\"gzip\"}");
+        var garbage = Encoding.UTF8.GetBytes("{\"not\":\"compressed\"}");
 
-        var (logged, wire) = await Invoke(Respond("application/json", garbage, "gzip"));
+        var (logged, wire) = await Invoke(Respond("application/json", garbage, encoding));
 
         Assert.Equal(garbage, wire);
         Assert.Null(logged!.ResponseBody);
+    }
+
+    [Fact]
+    public async Task An_encoding_the_gateway_cannot_inflate_is_not_logged_as_garbage_text()
+    {
+        var zstdLike = Gzip(Json(50)); // bytes we cannot read when they are labelled zstd
+
+        var (logged, wire) = await Invoke(Respond("application/json", zstdLike, "zstd"));
+
+        Assert.Equal(zstdLike, wire);
+        Assert.Null(logged!.ResponseBody);
+    }
+
+    [Fact]
+    public async Task A_large_text_response_that_is_not_json_keeps_its_size_placeholder()
+    {
+        var script = Encoding.UTF8.GetBytes(new string('x', 5 * 1024 * 1024));
+
+        var (logged, wire) = await Invoke(Respond("text/javascript", script));
+
+        Assert.Equal(script, wire);
+        Assert.StartsWith("[LARGE PAYLOAD: text/javascript", logged!.ResponseBody);
     }
 
     [Fact]

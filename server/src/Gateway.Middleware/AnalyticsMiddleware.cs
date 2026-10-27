@@ -125,7 +125,16 @@ public class AnalyticsMiddleware
                         capture.BytesWritten);
                 }
             }
-            // Binary or any other content-type - don't save (null), as before
+            else if (capture.Overflowed && !PayloadHelper.IsBinaryContent(responseContentType))
+            {
+                // A large text that is not JSON (a 5 MB main.dart.js, an HTML
+                // page) keeps the size placeholder it had before the tee;
+                // only JSON bodies are ever copied.
+                responseBody = PayloadHelper.CreateLargePayloadPlaceholder(
+                    responseContentType,
+                    capture.BytesWritten);
+            }
+            // Binary or any other small non-JSON content-type - don't save (null), as before
 
             // Log the request with response data (sanitize ALL strings)
             var dto = new CreateRequestDto(
@@ -186,6 +195,13 @@ public class AnalyticsMiddleware
     private async Task<string?> ReadJsonForLogAsync(Stream body, string? contentEncoding, string? contentType, long wireLength)
     {
         var decompressed = GetDecompressedStream(body, contentEncoding);
+        if (decompressed == null)
+        {
+            // zstd or anything else we cannot inflate: the bytes would be
+            // stored as garbage text, so the body is not logged at all.
+            _logger.LogWarning("Unsupported Content-Encoding {ContentEncoding}: body not logged", contentEncoding);
+            return null;
+        }
         try
         {
             var text = await PayloadHelper.ReadTextWithinLimitAsync(decompressed, PayloadHelper.MaxPayloadSize);
@@ -193,7 +209,10 @@ public class AnalyticsMiddleware
                 ? PayloadHelper.CreateLargeDecompressedPlaceholder(contentType, wireLength, contentEncoding)
                 : PayloadHelper.SanitizeString(text);
         }
-        catch (InvalidDataException ex)
+        // GZipStream/DeflateStream throw InvalidDataException on corrupt input;
+        // BrotliStream throws InvalidOperationException ("Decoder ran into
+        // invalid data."). Both mean the same thing here: no body to log.
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException)
         {
             _logger.LogWarning(ex, "Could not decompress a {ContentEncoding} body for the analytics log", contentEncoding);
             return null;
@@ -206,20 +225,22 @@ public class AnalyticsMiddleware
     }
 
     /// <summary>
-    /// Returns a decompressed stream if Content-Encoding is gzip, deflate, or br.
-    /// Otherwise returns the original stream unchanged.
+    /// The stream to read the text from: the body itself without a
+    /// Content-Encoding (or "identity"), a decompressor for gzip, deflate
+    /// and br, and null for any encoding this gateway cannot inflate.
     /// </summary>
-    private static Stream GetDecompressedStream(Stream stream, string? contentEncoding)
+    private static Stream? GetDecompressedStream(Stream stream, string? contentEncoding)
     {
         if (string.IsNullOrEmpty(contentEncoding))
             return stream;
 
-        return contentEncoding.ToLowerInvariant() switch
+        return contentEncoding.Trim().ToLowerInvariant() switch
         {
+            "identity" => stream,
             "gzip" => new GZipStream(stream, CompressionMode.Decompress, leaveOpen: true),
             "deflate" => new DeflateStream(stream, CompressionMode.Decompress, leaveOpen: true),
             "br" => new BrotliStream(stream, CompressionMode.Decompress, leaveOpen: true),
-            _ => stream
+            _ => null
         };
     }
 
