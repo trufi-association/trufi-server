@@ -8,6 +8,11 @@ namespace Gateway.Shared.Tests;
 
 public class RequestServiceTests
 {
+    /// <summary>A request with only the three required fields; every optional column stays null.</summary>
+    private static CreateRequestDto Dto(string method, string uri, string host) =>
+        new(method, uri, host, Ip: null, DeviceId: null, UserAgent: null,
+            RequestContentType: null, RequestHeaders: null, Body: null);
+
     private AnalyticsDbContext CreateInMemoryContext()
     {
         var options = new DbContextOptionsBuilder<AnalyticsDbContext>()
@@ -23,13 +28,19 @@ public class RequestServiceTests
         using var context = CreateInMemoryContext();
         var service = new RequestService(context);
         var dto = new CreateRequestDto(
-            Method: "GET",
+            Method: "POST",
             Uri: "/api/test",
             Host: "example.com",
             Ip: "127.0.0.1",
             DeviceId: "device-123",
             UserAgent: "TestAgent",
-            Body: null
+            RequestContentType: "application/json",
+            RequestHeaders: "{\"Accept\":\"application/json\"}",
+            Body: "{\"q\":1}",
+            StatusCode: 201,
+            ResponseContentType: "text/plain",
+            ResponseHeaders: "{\"Server\":\"test\"}",
+            ResponseBody: "ok"
         );
 
         // Act
@@ -37,10 +48,17 @@ public class RequestServiceTests
 
         // Assert
         Assert.NotEqual(0, result.Id);
-        Assert.Equal("GET", result.Method);
+        Assert.Equal("POST", result.Method);
         Assert.Equal("/api/test", result.Uri);
         Assert.Equal("example.com", result.Host);
         Assert.Equal("device-123", result.DeviceId);
+        Assert.Equal("application/json", result.RequestContentType);
+        Assert.Equal("{\"Accept\":\"application/json\"}", result.RequestHeaders);
+        Assert.Equal("{\"q\":1}", result.Body);
+        Assert.Equal(201, result.StatusCode);
+        Assert.Equal("text/plain", result.ResponseContentType);
+        Assert.Equal("{\"Server\":\"test\"}", result.ResponseHeaders);
+        Assert.Equal("ok", result.ResponseBody);
     }
 
     [Fact]
@@ -51,9 +69,9 @@ public class RequestServiceTests
         var service = new RequestService(context);
 
         // Create test data
-        await service.CreateRequestAsync(new CreateRequestDto("GET", "/api/v1", "host1.com", null, null, null, null));
-        await service.CreateRequestAsync(new CreateRequestDto("POST", "/api/v2", "host1.com", null, null, null, null));
-        await service.CreateRequestAsync(new CreateRequestDto("GET", "/api/v3", "host2.com", null, null, null, null));
+        await service.CreateRequestAsync(Dto("GET", "/api/v1", "host1.com"));
+        await service.CreateRequestAsync(Dto("POST", "/api/v2", "host1.com"));
+        await service.CreateRequestAsync(Dto("GET", "/api/v3", "host2.com"));
 
         // Act
         var filter = new RequestFilter(Host: "host1.com");
@@ -73,7 +91,7 @@ public class RequestServiceTests
 
         for (int i = 0; i < 10; i++)
         {
-            await service.CreateRequestAsync(new CreateRequestDto("GET", $"/api/{i}", "example.com", null, null, null, null));
+            await service.CreateRequestAsync(Dto("GET", $"/api/{i}", "example.com"));
         }
 
         // Act
@@ -90,7 +108,7 @@ public class RequestServiceTests
         // Arrange
         using var context = CreateInMemoryContext();
         var service = new RequestService(context);
-        var created = await service.CreateRequestAsync(new CreateRequestDto("GET", "/test", "example.com", null, null, null, null));
+        var created = await service.CreateRequestAsync(Dto("GET", "/test", "example.com"));
 
         // Act
         var result = await service.GetRequestByIdAsync(created.Id);
