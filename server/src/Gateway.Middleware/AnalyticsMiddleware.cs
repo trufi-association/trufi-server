@@ -71,24 +71,29 @@ public class AnalyticsMiddleware
             }
             else if (PayloadHelper.IsJsonContent(requestContentType))
             {
-                // Text/JSON payload - save complete (sanitized)
+                // Text/JSON payload - save complete (sanitized), decompressed
+                // when it came gzip/deflate/br, but only while the TEXT stays
+                // within the limit: Content-Length is the wire size.
                 context.Request.EnableBuffering();
-                // Decompress if Content-Encoding is present (gzip, deflate, br)
-                var decompressedStream = GetDecompressedStream(
+                requestBody = await ReadJsonForLogAsync(
                     context.Request.Body,
-                    context.Request.Headers.ContentEncoding.FirstOrDefault());
-                using var reader = new StreamReader(decompressedStream, leaveOpen: true);
-                var rawBody = await reader.ReadToEndAsync();
-                requestBody = PayloadHelper.SanitizeString(rawBody);
+                    context.Request.Headers.ContentEncoding.FirstOrDefault(),
+                    requestContentType,
+                    context.Request.ContentLength.Value);
                 context.Request.Body.Position = 0;
             }
             // Unknown content-type - don't save for safety (null)
         }
 
-        // Replace response body stream to capture the response
+        // Tee the response: the client gets every byte as it is produced, the
+        // log keeps a copy only of a JSON body and only up to the limit, so a
+        // 7 MB wasm or a 5 MB main.dart.js is neither buffered nor delayed.
         var originalBodyStream = context.Response.Body;
-        using var responseBodyStream = new MemoryStream();
-        context.Response.Body = responseBodyStream;
+        using var capture = new CapturingBodyStream(
+            originalBodyStream,
+            PayloadHelper.MaxPayloadSize,
+            () => PayloadHelper.IsJsonContent(context.Response.ContentType));
+        context.Response.Body = capture;
 
         try
         {
@@ -98,41 +103,29 @@ public class AnalyticsMiddleware
             var responseHeaders = SerializeHeaders(context.Response.Headers);
             var responseContentType = context.Response.ContentType;
 
-            // Read the response body
-            responseBodyStream.Seek(0, SeekOrigin.Begin);
-
             string? responseBody = null;
-            if (responseBodyStream.Length > 0)
+            if (capture.BytesWritten > 0 && PayloadHelper.IsJsonContent(responseContentType))
             {
-                if (PayloadHelper.IsBinaryContent(responseContentType))
-                {
-                    // Binary content - don't save (prevents UTF-8 error in PostgreSQL)
-                    responseBody = null;
-                }
-                else if (PayloadHelper.ExceedsMaxSize(responseBodyStream.Length))
+                if (capture.Overflowed)
                 {
                     // Large response - save only metadata
                     responseBody = PayloadHelper.CreateLargePayloadPlaceholder(
                         responseContentType,
-                        responseBodyStream.Length);
+                        capture.BytesWritten);
                 }
-                else if (PayloadHelper.IsJsonContent(responseContentType))
+                else
                 {
-                    // Decompress if Content-Encoding is present (gzip, deflate, br)
-                    var decompressedStream = GetDecompressedStream(
-                        responseBodyStream,
-                        context.Response.Headers.ContentEncoding.FirstOrDefault());
-                    using var reader = new StreamReader(decompressedStream, leaveOpen: true);
-                    var rawBody = await reader.ReadToEndAsync();
-                    responseBody = PayloadHelper.SanitizeString(rawBody);
+                    // Decompressed when it came gzip/deflate/br, within the
+                    // same limit applied to the text, not to the wire bytes.
+                    using var captured = capture.OpenCaptured();
+                    responseBody = await ReadJsonForLogAsync(
+                        captured,
+                        context.Response.Headers.ContentEncoding.FirstOrDefault(),
+                        responseContentType,
+                        capture.BytesWritten);
                 }
-                // Unknown content-type - don't save for safety (null)
             }
-
-            responseBodyStream.Seek(0, SeekOrigin.Begin);
-
-            // Copy response back to original stream
-            await responseBodyStream.CopyToAsync(originalBodyStream);
+            // Binary or any other content-type - don't save (null), as before
 
             // Log the request with response data (sanitize ALL strings)
             var dto = new CreateRequestDto(
@@ -181,6 +174,35 @@ public class AnalyticsMiddleware
         // Check Analytics metadata (default: false)
         return route.Metadata.TryGetValue("Analytics", out var value)
             && value.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The JSON text of a body for the log: decompressed when <paramref name="contentEncoding"/>
+    /// says so, sanitized, or a placeholder once the decompressed text passes
+    /// <see cref="PayloadHelper.MaxPayloadSize"/>. A size gate on the wire bytes alone
+    /// let a 359 KB gzip of a 1.4 MB JSON through in full (issue #5). A body that
+    /// does not decompress is logged as null, not as an exception.
+    /// </summary>
+    private async Task<string?> ReadJsonForLogAsync(Stream body, string? contentEncoding, string? contentType, long wireLength)
+    {
+        var decompressed = GetDecompressedStream(body, contentEncoding);
+        try
+        {
+            var text = await PayloadHelper.ReadTextWithinLimitAsync(decompressed, PayloadHelper.MaxPayloadSize);
+            return text == null
+                ? PayloadHelper.CreateLargeDecompressedPlaceholder(contentType, wireLength, contentEncoding)
+                : PayloadHelper.SanitizeString(text);
+        }
+        catch (InvalidDataException ex)
+        {
+            _logger.LogWarning(ex, "Could not decompress a {ContentEncoding} body for the analytics log", contentEncoding);
+            return null;
+        }
+        finally
+        {
+            if (!ReferenceEquals(decompressed, body))
+                decompressed.Dispose();
+        }
     }
 
     /// <summary>

@@ -61,6 +61,37 @@ public static class PayloadHelper
     }
 
     /// <summary>
+    /// Placeholder for a body whose compressed size passed the limit but whose
+    /// decompressed text did not: the wire size is what the gate saw, the limit
+    /// is what the log keeps.
+    /// </summary>
+    public static string CreateLargeDecompressedPlaceholder(string? contentType, long wireLength, string? contentEncoding)
+    {
+        var type = contentType?.Split(';')[0].Trim() ?? "unknown type";
+        var encoding = string.IsNullOrEmpty(contentEncoding) ? "" : $" {contentEncoding}";
+        return $"[LARGE PAYLOAD: {type}, {FormatBytes(wireLength)}{encoding} on the wire, over {FormatBytes(MaxPayloadSize)} decompressed]";
+    }
+
+    /// <summary>
+    /// Reads <paramref name="stream"/> as UTF-8 text while it stays within
+    /// <paramref name="maxBytes"/>; null as soon as it goes past, so a gzip
+    /// body is never inflated beyond the limit the log applies to it.
+    /// </summary>
+    public static async Task<string?> ReadTextWithinLimitAsync(Stream stream, int maxBytes, CancellationToken cancellationToken = default)
+    {
+        using var text = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            if (text.Length + read > maxBytes)
+                return null;
+            text.Write(chunk, 0, read);
+        }
+        return System.Text.Encoding.UTF8.GetString(text.GetBuffer(), 0, (int)text.Length);
+    }
+
+    /// <summary>
     /// Sanitizes a string by removing null characters (0x00) that cause errors in PostgreSQL.
     /// </summary>
     public static string? SanitizeString(string? input)
