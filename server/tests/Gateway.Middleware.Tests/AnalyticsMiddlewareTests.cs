@@ -152,9 +152,10 @@ public class AnalyticsMiddlewareTests
         Assert.Null(logged!.ResponseBody);
     }
 
-    // deflate is not in the list on purpose: a raw DEFLATE decoder accepts
-    // almost any byte sequence as a stream, so garbage comes out as garbage
-    // text rather than as an exception.
+    // deflate is not in the list on purpose: whether a raw DEFLATE decoder
+    // throws on garbage depends on the payload (some inputs decode to junk
+    // text, others throw InvalidDataException), so the outcome is not a
+    // stable assertion.
     [Theory]
     [InlineData("gzip")]
     [InlineData("br")] // BrotliStream throws InvalidOperationException, not InvalidDataException

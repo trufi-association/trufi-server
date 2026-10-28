@@ -199,7 +199,8 @@ public class AnalyticsMiddleware
         {
             // zstd or anything else we cannot inflate: the bytes would be
             // stored as garbage text, so the body is not logged at all.
-            _logger.LogWarning("Unsupported Content-Encoding {ContentEncoding}: body not logged", contentEncoding);
+            // Debug, not warning: an upstream that serves zstd on an analytics route would warn on every request.
+            _logger.LogDebug("Unsupported Content-Encoding {ContentEncoding}: body not logged", contentEncoding);
             return null;
         }
         try
